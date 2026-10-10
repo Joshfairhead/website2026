@@ -19,8 +19,4 @@ jobs:
       - name: Test
         run: cargo test --locked
       - name: Build every target and check links
-        run: cargo run --locked -- build --all
-      - uses: actions/upload-artifact@v4
-        with:
-          name: dist
-          path: dist
+        run: cargo run --locked --release -- build --all

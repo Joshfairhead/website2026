@@ -26,7 +26,7 @@ Inputs: [`information-architecture.md`](information-architecture.md) and [`conte
 | Markdown | `pulldown-cmark` (footnotes, tables, smart punctuation, heading anchors) | Matches current Markdown features |
 | Front matter + data | `serde` + `toml`, with `deny_unknown_fields` on every struct | The current `+++` TOML front matter carries over; typos fail the build |
 | Templates | `askama` | Templates are checked at compile time: a missing field or typo is a compile error, not a broken page |
-| Code highlighting | `syntect`, emitting CSS classes | 9 pages contain code blocks |
+| Code blocks | Plain, styled `<pre>` (no highlighter) | Only 2 pages contain code; add `syntect` if that grows |
 | CLI | `clap`: `build`, `serve`, `check`, `new` | |
 | Dev server | `axum` + `notify` (rebuild on change, live reload) | |
 | Errors | `thiserror` / `miette` (file + line in messages) | Readable failures |
@@ -39,7 +39,7 @@ Cargo.toml / rust-toolchain.toml
 src/            main.rs · config.rs · content/ (load, schema, validate) · render/ · shortcodes.rs · links.rs · serve.rs
 templates/      askama templates (base, card, recipient, listing, entry, gallery, music)
 static/         css/ · js/ · fonts/ · favicon
-site.toml       the tree: triads, categories, instances, hosts, facets (single source of truth)
+site.toml       the tree: triads, categories, instances, collections, breakouts (single source of truth)
 content/
   root/         _index.md (business card) · for/<org>.md
   curations/sights/art/          items.toml + images/
@@ -58,11 +58,13 @@ A content folder's path *is* its node. An entry outside a node declared in `site
 
 ## 4. Content model
 
-**`site.toml`** declares each node's id, label, parent, path, allowed facets, and an optional `breakout = "sights.joshafairhead.com"`. Menus, breadcrumbs, listings and breakout targets all derive from it.
+**`site.toml`** declares each node's id, label, parent, an optional `collection` (`music` or `art`), and an optional `breakout = "sights.joshafairhead.com"`. Menus, breadcrumbs, listings and breakout targets all derive from it.
 
 **Entry front matter** (common to all entries):
 - Required: `title`, `date`, `description`.
-- Optional: `tags`, `card`, `hero`, `banner`, `weight`, `toc`, `featured`.
+- Optional: `tags`, `card` (listing image), `banner` (shown at the top of the entry), `toc`.
+
+`hero`, `weight` and `featured` were dropped in migration: nothing ordered by weight (every section sorted by date) and `hero = false` is expressed by leaving `banner` out.
 
 `authors` is dropped, since the site has a single author. Per-page `styles`/`scripts` are dropped: components come from the entry's node. Fields specific to a node type (e.g. tea) are declared on that type and validated the same way.
 
@@ -94,7 +96,7 @@ Empty nodes produce a warning, not an error, and are hidden from menus.
 | `/for/<org>` | Recipient card (tagline + links) |
 | Triad / category / instance | Breadcrumb, level menu (children of the current node), and a card grid of all published descendants |
 | Entry | Hero, title, date, reading time, optional ToC, body, breadcrumb back up |
-| Art | Masonry gallery with lightbox; facets: group, artist |
+| Art | Masonry gallery with lightbox; filter chips by group; artist and source on each caption |
 | Music | Facet switch Artists / Albums / Tracks; artist cards link to artist pages; album and track records link out |
 | 404 | Per site, with a link to root |
 
@@ -121,7 +123,16 @@ Listings sort by date, newest first, by default. Client-side sort (date / title)
 
 A red CI blocks merge and deploy. Locally, `cargo run -- check` runs 3–5.
 
-## 9. Migration (one-off)
+## 9. Migration (one-off) ✅
+
+Done with `tools/migrate.py` (kept for the record). What it changed beyond moving files:
+
+- Photos over 1 MB were downscaled to 2400 px, then JPEG/WebP files over 400 KB to 2000 px at quality 82. The originals stay in the `creative` repo.
+- Broken references in the old site were fixed: `Culto.jpeg` → `culto.jpeg` (case only worked on macOS), a `12perseverence.jpeg` that never existed was dropped from India 4, Hermitage's screenshots moved from a shared folder into the entry, the Iron Butterfly draft's missing card now uses `Ball.jpg`, and the Elton John album link `https:/https://…` was repaired.
+- Links to pages that became drafts (Newquay PAR, Cornwall Reflections) keep their text and lose the link; the old `/semioticsinbrief` link points at Semiotics in Brief.
+- Site-level drafts (`content/drafts/`, the former timeline) are loaded and validated but not rendered, even with `--drafts`, because they have no node yet.
+
+Original plan, for reference:
 
 A `tools/migrate` script (run once, then deleted) moves content from the Zola layout into the new tree, following `content-inventory.md` §6:
 - Moves folders, and sets drafts by location instead of flags.
@@ -136,9 +147,9 @@ The migrated content must pass §5 before Zola files are removed.
 | Phase | Delivers | Done when |
 |---|---|---|
 | P0 Scaffold ✅ | Cargo project, CLI skeleton, CI pipeline | CI green on an empty site |
-| P1 Model | `site.toml`, schemas, loader, validation, migration | All 111 pages + records load; validation passes; deliberate bad fixtures fail with clear errors |
-| P2 Render | Templates, menus, breadcrumbs, listings, entry pages, shortcodes | Every node and entry renders; link check passes; snapshots reviewed |
-| P3 Collections | Art gallery, music facets, recipient cards | 130 images, 64 albums and 14 tracks render with filters; works without JS |
+| P1 Model ✅ | `site.toml`, schemas, loader, validation, migration | All 111 pages + records load; validation passes; deliberate bad fixtures fail with clear errors |
+| P2 Render ✅ | Templates, menus, breadcrumbs, listings, entry pages, shortcodes | Every node and entry renders; link check passes; snapshots reviewed |
+| P3 Collections ✅ | Art gallery, music facets, recipient cards | 130 images, 64 albums and 14 tracks render with filters; works without JS |
 | P4 Deploy | Netlify sites for the monolith + first breakouts (Sights, Sounds, Tastes), deploy via Actions, DNS | `joshafairhead.com` serves the monolith, and each breakout host serves its subtree standalone |
 | P5 Cleanup | Point `joshafairhead.com` at the new monolith (replacing the `hub` deploy) | The hub is superseded; the old Zola hosts are left untouched |
 

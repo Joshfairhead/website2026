@@ -4,8 +4,10 @@
 //! (a node's subtree deployed as its own site). See docs/build-spec.md.
 
 mod config;
+mod content;
 mod error;
 mod links;
+mod markdown;
 mod render;
 
 use std::path::{Path, PathBuf};
@@ -14,8 +16,9 @@ use std::process::ExitCode;
 use clap::{Parser, Subcommand};
 
 use config::Tree;
+use content::Content;
 use error::Result;
-use render::Target;
+use render::{Site, Target};
 
 #[derive(Parser)]
 #[command(version, about = "Static site generator for joshafairhead.com")]
@@ -23,6 +26,9 @@ struct Cli {
     /// Path to the site tree.
     #[arg(long, default_value = "site.toml", global = true)]
     config: PathBuf,
+    /// Path to the content folder.
+    #[arg(long, default_value = "content", global = true)]
+    content: PathBuf,
     #[command(subcommand)]
     command: Command,
 }
@@ -40,6 +46,9 @@ enum Command {
         /// Output directory.
         #[arg(long, default_value = "dist")]
         out: PathBuf,
+        /// Include drafts (for local preview only; never deploy this output).
+        #[arg(long)]
+        drafts: bool,
     },
     /// Validate site.toml, build every target into a temporary folder and check links.
     Check,
@@ -58,18 +67,26 @@ fn main() -> ExitCode {
 
 fn run(cli: Cli) -> Result<()> {
     let tree = Tree::load(&cli.config)?;
+    let content = Content::load(&cli.content, &tree)?;
     match cli.command {
-        Command::Build { breakout, all, out } => {
+        Command::Build {
+            breakout,
+            all,
+            out,
+            drafts,
+        } => {
             let targets = match (breakout, all) {
                 (Some(id), _) => vec![Target::Breakout(id)],
                 (None, true) => all_targets(&tree),
                 (None, false) => vec![Target::Monolith],
             };
-            build_and_check(&tree, &targets, &out)
+            let site = Site::new(&tree, &content, drafts)?;
+            build_and_check(&site, &targets, &out)
         }
         Command::Check => {
             let tmp = tempfile::tempdir().map_err(|e| error::Error::io(Path::new("<temp>"), e))?;
-            build_and_check(&tree, &all_targets(&tree), tmp.path())?;
+            let site = Site::new(&tree, &content, false)?;
+            build_and_check(&site, &all_targets(&tree), tmp.path())?;
             println!("check passed");
             Ok(())
         }
@@ -82,10 +99,10 @@ fn all_targets(tree: &Tree) -> Vec<Target> {
         .collect()
 }
 
-fn build_and_check(tree: &Tree, targets: &[Target], out: &Path) -> Result<()> {
+fn build_and_check(site: &Site, targets: &[Target], out: &Path) -> Result<()> {
     let mut built = Vec::new();
     for t in targets {
-        let dir = render::build(tree, t, out)?;
+        let dir = render::build(site, t, out)?;
         println!("built {} -> {}", t.dir_name(), dir.display());
         built.push((t, dir));
     }
@@ -94,7 +111,7 @@ fn build_and_check(tree: &Tree, targets: &[Target], out: &Path) -> Result<()> {
         .find(|(t, _)| **t == Target::Monolith)
         .map(|(_, d)| d.as_path());
     for (_, dir) in &built {
-        links::check(dir, &tree.site.base_url, monolith)?;
+        links::check(dir, &site.tree.site.base_url, monolith)?;
     }
     Ok(())
 }

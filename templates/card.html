@@ -1,14 +1,15 @@
 {% extends "base.html" %}
 {% block title %}{{ title }}{% endblock %}
 {% block body %}
-<main class="biz">
+<main class="biz{% if still %} biz--still{% endif %}">
   <div class="biz__card">
     <h1 class="biz__name">{{ title }}</h1>
+    {% if let Some(t) = tagline %}<p class="biz__tagline">{{ t }}</p>{% endif %}
     <hr class="biz__rule">
-    <nav aria-label="Branches">
+    <nav aria-label="Links">
       <ul class="biz__triad">
-        {% for b in branches %}
-        <li><a href="{{ b.href }}" data-branch="{{ b.id }}">{{ b.label }}</a></li>
+        {% for l in links %}
+        <li><a href="{{ l.href }}"{% if !l.branch.is_empty() %} data-branch="{{ l.branch }}"{% endif %}>{{ l.label }}</a></li>
         {% endfor %}
       </ul>
     </nav>

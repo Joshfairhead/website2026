@@ -5,7 +5,7 @@
 #   id        unique slug; also its path segment
 #   label     display name
 #   parent    id of the parent node (omit for a branch, which sits under the root)
-#   facets    optional filters within the node (e.g. Music)
+#   collection  "music" or "art" for nodes whose content includes data files
 #   breakout  optional host this node's subtree is deployed to as its own site
 
 [site]
@@ -28,7 +28,7 @@ breakout = "sights.joshafairhead.com"
 id = "art"
 label = "Art"
 parent = "sights"
-facets = ["group", "artist"]
+collection = "art"
 
 [[node]]
 id = "sounds"
@@ -40,7 +40,7 @@ breakout = "sounds.joshafairhead.com"
 id = "music"
 label = "Music"
 parent = "sounds"
-facets = ["artists", "albums", "tracks"]
+collection = "music"
 
 [[node]]
 id = "tastes"

@@ -1,0 +1,20 @@
++++
+title = "Cat Stevens"
+date = 2021-08-01
+description = "Soft spoken seventies songwriter records commercial hits and cult classics before changing name and settling down."
+card = "teaforthetillerman2.jpg"
++++
+
+Cat Stevens was a songwriter I initially wrote off - for no fault of his own - but because he was guilty by association. The first time I heard of him was by proxy, where his brilliant hit song "Father and Son" was completely debased by a cover from "Ronan Keating" - the lead singer of a noughties Irish pop group called "Boyzone" launching his god awful solo career. Thankfully, the baby was not thrown out with the bathwater as I rediscovered him several years later when learning guitar in my teens. His songs were easy enough to play, yet creatively unpredictable and outside the box in comparison to other campfire songs you might learn to play on an acoustic guitar. And his production aesthetic was beautifully quirky with that 70s analog vibe. I'm not sure where he recorded to be honest, but his records have a UK sound to them, by which I mean well recorded yet full of blemishes and imperfections that add lots of character.
+
+Many people will be aware of his most famous tracks "Wild World" and the already mentioned "Father and Son" as they are exceptionally famous, but are probably unaware that he later converted to Islam after his rise to fame. Much to the dismay of his record label he also changed his name to Yusuf, which may either have been a clever way to escape the trappings of fame or career suicide. It was probably neither to be honest, I'm not so aware of his story and came to the party approximately 40 years after his ascent to fame (and subsequent cooling or descent). Whatever the case, besides his various albums - of which I'll confidently recommend "[Tea for the Tillerman](https://youtube.com/playlist?list=PLNPGM2D7aODdP86eGc68WNBgXzOacRDQY&si=m_qhCXfy8s9hU-YA)" - he also wrote all the music for the 1971 cult comedy [Harold and Maude](https://www.imdb.com/title/tt0067185/) which is also worth a watch.
+
+In regards to an album review, I'm not really going to bother going into detail on "Tea For The Tillerman" because many will already be familiar, which is why I've generally stayed away from reviewing classics. Instead I'm going to throw a curve ball for those intimately familiar with the album who will be delighted to learn that Yusuf recorded "[Tea For The Tillerman²](https://youtube.com/playlist?list=OLAK5uy_n0T0CDIQ9JPBX73Y8A3PCz78UrIUb7gOw&si=OnoHMD2QfKzPkuyi)" with a fresh twist! It reimagines all the songs in a new style, as well as modifying the album artwork to give the tillerman a space suit! 
+
+If you loved the original album, this is a gem of a remix. Most tracks are not too far off the originals, generally deepening the sound stage in service and support to the original song. There are some more radical reimaginings too, namely well chosen vibe changes like "On The Road To Find Out" which has a freaking awesome moody blues vibe with accompanying hammond organ and slide guitar - which for me sinks the original. With that said, his most famous tune "Wild World" is not permitted such grace, by being given a crooner vibe, and frankly sucks. "Father and Son" - the song that almost had me write him off - is however given a glorious remake with a soft choir, orchestra and even a new claymation video! 
+
+Father Son (notice the poetic close):
+<iframe width="560" height="315" src="https://www.youtube.com/embed/B_H5XuIb5WM?si=ZvDu_uImW1NPudN8" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
+
+On the Road To Find Out:
+<iframe width="560" height="315" src="https://www.youtube.com/embed/69yOu8hrQ6Q?si=5UII6KIB24Ch4prV" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>

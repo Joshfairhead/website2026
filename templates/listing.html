@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}{{ title }} · {{ chrome.site_title }}{% endblock %}
+{% block body_attrs %} data-branch="{{ chrome.branch }}"{% endblock %}
+{% block body %}
+<main class="page">
+  {% include "partials/crumbs.html" %}
+  <h1 class="title">{{ title }}</h1>
+  {% include "partials/pills.html" %}
+  {% if cards.is_empty() %}
+  <p class="empty">Nothing published here yet.</p>
+  {% else %}
+  {% include "partials/cards.html" %}
+  {% endif %}
+</main>
+{% endblock %}

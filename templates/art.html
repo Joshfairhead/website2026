@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}{{ title }} · {{ chrome.site_title }}{% endblock %}
+{% block body_attrs %} data-branch="{{ chrome.branch }}"{% endblock %}
+{% block body %}
+<main class="page page--wide">
+  {% include "partials/crumbs.html" %}
+  <h1 class="title">{{ title }}</h1>
+  {% include "partials/pills.html" %}
+  <div class="chips" role="toolbar" aria-label="Filter art" data-art-filter hidden>
+    <button class="chip" type="button" data-value="all" aria-pressed="true">All <span class="n">{{ total }}</span></button>
+    {% for c in chips %}
+    <button class="chip" type="button" data-value="{{ c.value }}" aria-pressed="false">{{ c.label }} <span class="n">{{ c.count }}</span></button>
+    {% endfor %}
+  </div>
+  <div class="art-grid" data-lightbox>
+    {% for f in figures %}
+    <figure class="art" data-group="{{ f.group }}">
+      <img src="{{ f.src }}" alt="{{ f.title }}, {{ f.artist }}" width="{{ f.width }}" height="{{ f.height }}" loading="lazy" decoding="async">
+      <figcaption><span class="art__title">{{ f.title }}</span><span class="art__artist">{{ f.artist }}</span>{% if let Some(s) = f.source %}<a class="art__source" href="{{ s }}" rel="noopener">Source</a>{% endif %}</figcaption>
+    </figure>
+    {% endfor %}
+  </div>
+</main>
+{% endblock %}

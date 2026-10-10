@@ -17,6 +17,16 @@ pub fn check(dir: &Path, base_url: &str, monolith: Option<&Path>) -> Result<()> 
             .display()
             .to_string();
         for link in attr_values(&html) {
+            if link.starts_with("@/") {
+                problems.push(format!("{rel_page}: unresolved internal link `{link}`"));
+                continue;
+            }
+            if link.starts_with("https:/") && !link.starts_with("https://")
+                || link.starts_with("http:/") && !link.starts_with("http://")
+            {
+                problems.push(format!("{rel_page}: malformed URL `{link}`"));
+                continue;
+            }
             let resolved = if let Some(path) = link.strip_prefix(base_url) {
                 match monolith {
                     Some(m) => resolve(m, path),
@@ -24,8 +34,16 @@ pub fn check(dir: &Path, base_url: &str, monolith: Option<&Path>) -> Result<()> 
                 }
             } else if link.starts_with('/') && !link.starts_with("//") {
                 resolve(dir, &link)
+            } else if is_relative(&link) {
+                let page_dir = page.parent().unwrap_or(dir);
+                let target = resolve(page_dir, &percent_decode(&link));
+                if !target.starts_with(dir) {
+                    problems.push(format!("{rel_page}: `{link}` points outside the site"));
+                    continue;
+                }
+                target
             } else {
-                continue; // external, mailto:, #anchor and relative links
+                continue; // external, mailto:, tel:, #anchor
             };
             if !resolved.is_file() {
                 problems.push(format!("{rel_page}: `{link}` does not exist"));
@@ -44,11 +62,44 @@ pub fn check(dir: &Path, base_url: &str, monolith: Option<&Path>) -> Result<()> 
 
 fn resolve(root: &Path, url_path: &str) -> PathBuf {
     let path = url_path.split(['#', '?']).next().unwrap_or("");
-    let mut p = root.join(path.trim_start_matches('/'));
+    let mut p = root.to_path_buf();
+    for seg in path.trim_start_matches('/').split('/') {
+        match seg {
+            "" | "." => {}
+            ".." => {
+                p.pop();
+            }
+            s => p.push(s),
+        }
+    }
     if path.is_empty() || path.ends_with('/') {
         p.push("index.html");
     }
     p
+}
+
+fn is_relative(link: &str) -> bool {
+    !link.is_empty() && !link.starts_with('#') && !link.starts_with('/') && !link.contains(':')
+}
+
+fn percent_decode(s: &str) -> String {
+    let bytes = s.as_bytes();
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'%'
+            && i + 2 < bytes.len()
+            && let Ok(b) =
+                u8::from_str_radix(std::str::from_utf8(&bytes[i + 1..i + 3]).unwrap_or(""), 16)
+        {
+            out.push(b);
+            i += 3;
+        } else {
+            out.push(bytes[i]);
+            i += 1;
+        }
+    }
+    String::from_utf8_lossy(&out).into_owned()
 }
 
 /// Values of every `href="…"` and `src="…"` attribute.
@@ -96,15 +147,16 @@ mod tests {
             dir.path().join("index.html"),
             r##"<a href="/a/">ok</a><a href="/missing/">bad</a>
                <a href="https://elsewhere.org/x">ext</a><a href="#top">anchor</a>
-               <a href="mailto:a@b.c">mail</a>"##,
+               <a href="mailto:a@b.c">mail</a><img src="pic.jpg"><img src="a/../a/">"##,
         )
         .unwrap();
         let err = check(dir.path(), "https://example.com", None).unwrap_err();
         let Error::Links { problems, .. } = err else {
             panic!("{err:?}")
         };
-        assert_eq!(problems.len(), 1);
+        assert_eq!(problems.len(), 2, "{problems:?}");
         assert!(problems[0].contains("/missing/"));
+        assert!(problems[1].contains("pic.jpg"));
     }
 
     #[test]

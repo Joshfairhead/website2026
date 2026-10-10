@@ -1,14 +1,23 @@
 //! Rendering targets (the monolith and each breakout) to static HTML.
 
+use std::collections::{BTreeMap, HashMap};
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::LazyLock;
 
 use askama::Template;
+use regex::Regex;
 
-use crate::config::{Node, Tree};
+use crate::config::{Collection, Node, Tree};
+use crate::content::{Content, Entry};
 use crate::error::{Error, Result};
+use crate::markdown::{self, Heading, Rendered};
 
 const STYLESHEET: &str = include_str!("../static/site.css");
+const SCRIPT: &str = include_str!("../static/site.js");
+
+static AT_LINK: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r##"(href|src)="@/([^"#]*?)/?(#[^"]*)?""##).unwrap());
 
 /// What to build: the whole tree, or one node's subtree as a standalone site.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -34,45 +43,207 @@ impl Target {
     }
 }
 
+/// Everything shared by all targets: the tree, the content and rendered bodies.
+pub struct Site<'a> {
+    pub tree: &'a Tree,
+    pub content: &'a Content,
+    pub drafts: bool,
+    bodies: HashMap<(String, String), Rendered>,
+}
+
+impl<'a> Site<'a> {
+    /// Renders every entry body once, collecting all problems before failing.
+    pub fn new(tree: &'a Tree, content: &'a Content, drafts: bool) -> Result<Self> {
+        let mut bodies = HashMap::new();
+        let mut problems = Vec::new();
+        for e in &content.entries {
+            let Some(node) = &e.node else { continue };
+            if e.draft && !drafts {
+                continue;
+            }
+            match markdown::render(&e.body) {
+                Ok(r) => {
+                    bodies.insert((node.clone(), e.slug.clone()), r);
+                }
+                Err(msg) => {
+                    problems.push(format!("{}: {msg}", rel(content, &e.dir.join("index.md"))))
+                }
+            }
+        }
+        if !problems.is_empty() {
+            return Err(Error::Content(problems));
+        }
+        Ok(Site {
+            tree,
+            content,
+            drafts,
+            bodies,
+        })
+    }
+
+    fn entries(&self, node: &str) -> Vec<&'a Entry> {
+        self.content.entries_of(node, self.drafts).collect()
+    }
+
+    /// Entries in a node's whole subtree, newest first.
+    fn subtree_entries(&self, node: &Node) -> Vec<&'a Entry> {
+        self.content
+            .entries
+            .iter()
+            .filter(|e| {
+                (self.drafts || !e.draft)
+                    && e.node
+                        .as_deref()
+                        .is_some_and(|n| self.tree.is_within(n, &node.id))
+            })
+            .collect()
+    }
+
+    /// What a menu shows next to a node: entries plus collection items in its subtree.
+    fn count(&self, node: &Node) -> usize {
+        let art =
+            if self.tree.iter().any(|n| {
+                n.collection == Some(Collection::Art) && self.tree.is_within(&n.id, &node.id)
+            }) {
+                self.content.art.len()
+            } else {
+                0
+            };
+        self.subtree_entries(node).len() + art
+    }
+}
+
 pub struct Link {
     pub label: String,
     pub href: String,
 }
 
-pub struct MenuItem {
+pub struct Pill {
     pub label: String,
     pub href: String,
+    pub count: usize,
     pub current: bool,
+    /// Child id to filter the grid by in place; empty for a plain link.
+    pub filter: String,
+}
+
+pub struct Card {
+    pub href: String,
+    pub title: String,
+    pub description: String,
+    pub date: String,
+    pub image: Option<String>,
+    pub label: String,
+    pub filter: String,
+    pub draft: bool,
+}
+
+pub struct AlbumCard {
+    pub title: String,
+    pub artist: String,
+    pub link: Option<String>,
+    pub cover: Option<String>,
+    pub artist_href: Option<String>,
+}
+
+pub struct TrackRow {
+    pub title: String,
+    pub artist: String,
+    pub link: Option<String>,
+}
+
+pub struct Chip {
+    pub label: String,
+    pub value: String,
+    pub count: usize,
+}
+
+pub struct ArtFigure {
+    pub src: String,
+    pub title: String,
+    pub artist: String,
+    pub group: String,
+    pub source: Option<String>,
+    pub width: u32,
+    pub height: u32,
 }
 
 #[derive(Template)]
 #[template(path = "card.html")]
 struct CardPage<'a> {
     title: &'a str,
+    tagline: Option<&'a str>,
     contact: &'a str,
-    branches: Vec<BranchLink>,
+    links: Vec<BranchLink>,
+    still: bool,
 }
 
 struct BranchLink {
-    id: String,
+    branch: String,
     label: String,
     href: String,
 }
 
-#[derive(Template)]
-#[template(path = "node.html")]
-struct NodePage<'a> {
-    title: &'a str,
-    site_title: &'a str,
-    branch: &'a str,
+/// Breadcrumb trail and site-wide chrome shared by every page below the root.
+struct Chrome {
+    site_title: String,
+    branch: String,
     crumbs: Vec<Link>,
     home: Option<Link>,
-    menu: Vec<MenuItem>,
-    facets: &'a [String],
+}
+
+#[derive(Template)]
+#[template(path = "listing.html")]
+struct ListingPage {
+    chrome: Chrome,
+    title: String,
+    pills: Vec<Pill>,
+    cards: Vec<Card>,
+}
+
+#[derive(Template)]
+#[template(path = "music.html")]
+struct MusicPage {
+    chrome: Chrome,
+    title: String,
+    pills: Vec<Pill>,
+    artists: Vec<Card>,
+    albums: Vec<AlbumCard>,
+    tracks: Vec<TrackRow>,
+}
+
+#[derive(Template)]
+#[template(path = "art.html")]
+struct ArtPage {
+    chrome: Chrome,
+    title: String,
+    pills: Vec<Pill>,
+    chips: Vec<Chip>,
+    total: usize,
+    figures: Vec<ArtFigure>,
+}
+
+#[derive(Template)]
+#[template(path = "entry.html")]
+struct EntryPage<'a> {
+    chrome: Chrome,
+    title: &'a str,
+    description: &'a str,
+    date: &'a str,
+    minutes: usize,
+    draft: bool,
+    tags: &'a [String],
+    banner: Option<String>,
+    toc: &'a [Heading],
+    body: String,
+    albums: Vec<AlbumCard>,
+    newer: Option<Link>,
+    older: Option<Link>,
 }
 
 /// Builds one target into `out/<target dir>`. Returns the directory written.
-pub fn build(tree: &Tree, target: &Target, out: &Path) -> Result<PathBuf> {
+pub fn build(site: &Site, target: &Target, out: &Path) -> Result<PathBuf> {
+    let tree = site.tree;
     if let Target::Breakout(id) = target {
         let node = tree.get(id).ok_or_else(|| Error::UnknownNode(id.clone()))?;
         if node.breakout.is_none() {
@@ -83,56 +254,267 @@ pub fn build(tree: &Tree, target: &Target, out: &Path) -> Result<PathBuf> {
     if dir.exists() {
         fs::remove_dir_all(&dir).map_err(|e| Error::io(&dir, e))?;
     }
-    let urls = Urls { tree, target };
+    let urls = Urls::new(site, target);
 
     if *target == Target::Monolith {
         let page = CardPage {
             title: &tree.site.title,
+            tagline: None,
             contact: &tree.site.contact,
-            branches: tree
+            links: tree
                 .branches()
                 .map(|b| BranchLink {
-                    id: b.id.clone(),
+                    branch: b.id.clone(),
                     label: b.label.clone(),
                     href: urls.node(b),
                 })
                 .collect(),
+            still: false,
         };
         write(&dir.join("index.html"), &page.render()?)?;
+        for r in &site.content.recipients {
+            let page = CardPage {
+                title: &tree.site.title,
+                tagline: r.card.tagline.as_deref(),
+                contact: &tree.site.contact,
+                links: r
+                    .card
+                    .links
+                    .iter()
+                    .map(|l| BranchLink {
+                        branch: String::new(),
+                        label: l.label.clone(),
+                        href: l.url.clone(),
+                    })
+                    .collect(),
+                still: true,
+            };
+            write(
+                &dir.join("for").join(&r.slug).join("index.html"),
+                &page.render()?,
+            )?;
+        }
     }
 
     for node in tree.iter() {
-        if let Some(root) = target.root()
-            && !tree.is_within(&node.id, root)
-        {
+        let Some(rel) = urls.local_path(node) else {
             continue;
-        }
-        let page = NodePage {
-            title: &node.label,
-            site_title: &tree.site.title,
-            branch: node.branch(),
-            crumbs: urls.crumbs(node),
-            home: target.root().map(|_| Link {
-                label: host_of(&tree.site.base_url).to_string(),
-                href: format!("{}/", tree.site.base_url),
-            }),
-            menu: urls.menu(node),
-            facets: &node.facets,
         };
-        let rel = urls.local_path(node).expect("node is within the target");
-        write(&dir.join(rel).join("index.html"), &page.render()?)?;
+        let node_dir = dir.join(&rel);
+        let chrome = urls.chrome(node, &node.lineage[..node.lineage.len() - 1]);
+        let html = match node.collection {
+            Some(Collection::Music) => music_page(site, &urls, node, chrome)?,
+            Some(Collection::Art) => {
+                let src = site.content.root.join(node.path()).join("images");
+                if src.is_dir() {
+                    copy_dir(&src, &node_dir.join("images"))?;
+                }
+                art_page(site, &urls, node, chrome)?
+            }
+            None => listing_page(site, &urls, node, chrome)?,
+        };
+        let html = urls
+            .resolve(&html)
+            .map_err(|err| Error::Content(vec![format!("content/{}: {err}", node.path())]))?;
+        write(&node_dir.join("index.html"), &html)?;
+
+        let entries = site.entries(&node.id);
+        for (i, e) in entries.iter().enumerate() {
+            let out_dir = node_dir.join(&e.slug);
+            copy_dir(&e.dir, &out_dir)?;
+            let html = entry_page(
+                site,
+                &urls,
+                node,
+                e,
+                entries.get(i.wrapping_sub(1)).copied(),
+                entries.get(i + 1).copied(),
+            )?;
+            let html = urls
+                .resolve(&html)
+                .map_err(|err| Error::Content(vec![format!("{}: {err}", rel_entry(site, e))]))?;
+            write(&out_dir.join("index.html"), &html)?;
+        }
     }
 
     write(&dir.join("site.css"), STYLESHEET)?;
+    write(&dir.join("site.js"), SCRIPT)?;
     Ok(dir)
 }
 
-struct Urls<'a> {
-    tree: &'a Tree,
-    target: &'a Target,
+fn listing_page(site: &Site, urls: &Urls, node: &Node, chrome: Chrome) -> Result<String> {
+    let (pills, cards) = if node.is_leaf() {
+        let cards = site
+            .entries(&node.id)
+            .into_iter()
+            .map(|e| urls.card(node, e, None))
+            .collect();
+        (urls.sibling_pills(node), cards)
+    } else {
+        let depth = node.lineage.len();
+        let cards = site
+            .subtree_entries(node)
+            .into_iter()
+            .map(|e| {
+                let n = site.tree.node(e.node.as_deref().unwrap());
+                let child = site.tree.node(&n.lineage[depth]);
+                urls.card(n, e, Some(child))
+            })
+            .collect();
+        (urls.child_pills(node), cards)
+    };
+    Ok(ListingPage {
+        chrome,
+        title: node.label.clone(),
+        pills,
+        cards,
+    }
+    .render()?)
 }
 
-impl Urls<'_> {
+fn music_page(site: &Site, urls: &Urls, node: &Node, chrome: Chrome) -> Result<String> {
+    let artists = site
+        .entries(&node.id)
+        .into_iter()
+        .map(|e| urls.card(node, e, None))
+        .collect();
+    let albums = site
+        .content
+        .albums
+        .iter()
+        .map(|a| urls.album(node, a))
+        .collect();
+    let tracks = site
+        .content
+        .tracks
+        .iter()
+        .map(|t| TrackRow {
+            title: t.title.clone(),
+            artist: t.artist.clone(),
+            link: t.link.clone(),
+        })
+        .collect();
+    Ok(MusicPage {
+        chrome,
+        title: node.label.clone(),
+        pills: urls.sibling_pills(node),
+        artists,
+        albums,
+        tracks,
+    }
+    .render()?)
+}
+
+fn art_page(site: &Site, urls: &Urls, node: &Node, chrome: Chrome) -> Result<String> {
+    let mut groups: BTreeMap<&str, usize> = BTreeMap::new();
+    let mut order = Vec::new();
+    for i in &site.content.art {
+        let n = groups.entry(&i.group).or_insert(0);
+        if *n == 0 {
+            order.push(i.group.as_str());
+        }
+        *n += 1;
+    }
+    let base = urls.node(node);
+    Ok(ArtPage {
+        chrome,
+        title: node.label.clone(),
+        pills: urls.sibling_pills(node),
+        chips: order
+            .into_iter()
+            .map(|g| Chip {
+                label: g.to_string(),
+                value: markdown::slugify(g),
+                count: groups[g],
+            })
+            .collect(),
+        total: site.content.art.len(),
+        figures: site
+            .content
+            .art
+            .iter()
+            .map(|i| ArtFigure {
+                src: format!("{base}{}", i.file),
+                title: i.title.clone(),
+                artist: i.artist.clone(),
+                group: markdown::slugify(&i.group),
+                source: i.source.clone(),
+                width: i.width,
+                height: i.height,
+            })
+            .collect(),
+    }
+    .render()?)
+}
+
+fn entry_page(
+    site: &Site,
+    urls: &Urls,
+    node: &Node,
+    e: &Entry,
+    newer: Option<&Entry>,
+    older: Option<&Entry>,
+) -> Result<String> {
+    let body = &site.bodies[&(node.id.clone(), e.slug.clone())];
+    let link = |x: &Entry| Link {
+        label: x.fm.title.clone(),
+        href: format!("{}{}/", urls.node(node), x.slug),
+    };
+    let albums = if node.collection == Some(Collection::Music) {
+        site.content
+            .albums
+            .iter()
+            .filter(|a| a.artist_page.as_deref() == Some(e.slug.as_str()))
+            .map(|a| urls.album(node, a))
+            .collect()
+    } else {
+        Vec::new()
+    };
+    Ok(EntryPage {
+        chrome: urls.chrome(node, &node.lineage),
+        title: &e.fm.title,
+        description: &e.fm.description,
+        date: &e.date,
+        minutes: body.reading_minutes(),
+        draft: e.draft,
+        tags: &e.fm.tags,
+        banner: e.fm.banner.clone(),
+        toc: if e.fm.toc { &body.toc } else { &[] },
+        body: body.html.clone(),
+        albums,
+        newer: newer.map(link),
+        older: older.map(link),
+    }
+    .render()?)
+}
+
+struct Urls<'a> {
+    site: &'a Site<'a>,
+    target: &'a Target,
+    /// Monolith path (`curations/sounds/music/gogo`) → URL for this target.
+    paths: HashMap<String, String>,
+}
+
+impl<'a> Urls<'a> {
+    fn new(site: &'a Site<'a>, target: &'a Target) -> Self {
+        let mut u = Urls {
+            site,
+            target,
+            paths: HashMap::new(),
+        };
+        for node in site.tree.iter() {
+            let url = u.node(node);
+            for e in site.entries(&node.id) {
+                u.paths.insert(
+                    format!("{}/{}", node.path(), e.slug),
+                    format!("{url}{}/", e.slug),
+                );
+            }
+            u.paths.insert(node.path(), url);
+        }
+        u
+    }
+
     /// Path of a node relative to this target's root, if it is inside the target.
     fn local_path(&self, node: &Node) -> Option<PathBuf> {
         let segs = node.segments();
@@ -148,62 +530,161 @@ impl Urls<'_> {
         match self.local_path(node) {
             Some(p) if p.as_os_str().is_empty() => "/".to_string(),
             Some(p) => format!("/{}/", p.to_string_lossy()),
-            None => format!("{}/{}/", self.tree.site.base_url, node.segments().join("/")),
+            None => format!("{}/{}/", self.site.tree.site.base_url, node.path()),
         }
     }
 
-    /// Ancestors shown in the breadcrumb, excluding the current node.
-    fn crumbs(&self, node: &Node) -> Vec<Link> {
-        let mut out = Vec::new();
+    /// Rewrites `@/<monolith path>/` links for this target.
+    fn resolve(&self, html: &str) -> std::result::Result<String, String> {
+        let mut missing = Vec::new();
+        let out = AT_LINK.replace_all(html, |c: &regex::Captures| match self.paths.get(&c[2]) {
+            Some(url) => format!(
+                r#"{}="{url}{}""#,
+                &c[1],
+                c.get(3).map_or("", |m| m.as_str())
+            ),
+            None => {
+                missing.push(format!("@/{}/", &c[2]));
+                c[0].to_string()
+            }
+        });
+        if missing.is_empty() {
+            Ok(out.into_owned())
+        } else {
+            Err(format!(
+                "internal link to an unpublished or unknown page: {}",
+                missing.join(", ")
+            ))
+        }
+    }
+
+    fn chrome(&self, node: &Node, trail: &[String]) -> Chrome {
+        let tree = self.site.tree;
+        let mut crumbs = Vec::new();
         if self.target.root().is_none() {
-            out.push(Link {
-                label: host_of(&self.tree.site.base_url).to_string(),
+            crumbs.push(Link {
+                label: host_of(&tree.site.base_url).to_string(),
                 href: "/".to_string(),
             });
         }
-        let ancestors = &node.lineage[..node.lineage.len() - 1];
-        for id in ancestors {
-            let a = self.tree.node(id);
+        for id in trail {
+            let a = tree.node(id);
             if self.local_path(a).is_some() {
-                out.push(Link {
+                crumbs.push(Link {
                     label: a.label.clone(),
                     href: self.node(a),
                 });
             }
         }
-        out
+        Chrome {
+            site_title: tree.site.title.clone(),
+            branch: node.branch().to_string(),
+            crumbs,
+            home: self.target.root().map(|_| Link {
+                label: host_of(&tree.site.base_url).to_string(),
+                href: format!("{}/", tree.site.base_url),
+            }),
+        }
     }
 
-    /// The level menu: a node's children, or for a leaf without facets,
-    /// its siblings with itself marked current.
-    fn menu(&self, node: &Node) -> Vec<MenuItem> {
-        let (ids, current) = if !node.children.is_empty() {
-            (&node.children, None)
-        } else if !node.facets.is_empty() {
-            return Vec::new();
-        } else {
-            match &node.parent {
-                Some(p) if self.local_path(self.tree.node(p)).is_some() => {
-                    (&self.tree.node(p).children, Some(node.id.as_str()))
-                }
-                _ => return Vec::new(),
+    /// A non-leaf node's children as filter pills, led by `All`.
+    fn child_pills(&self, node: &Node) -> Vec<Pill> {
+        let mut pills = vec![Pill {
+            label: "All".into(),
+            href: self.node(node),
+            count: self.site.subtree_entries(node).len(),
+            current: true,
+            filter: "all".into(),
+        }];
+        for id in &node.children {
+            let child = self.site.tree.node(id);
+            let count = self.site.count(child);
+            if count == 0 {
+                continue;
             }
+            let has_entries = !self.site.subtree_entries(child).is_empty();
+            pills.push(Pill {
+                label: child.label.clone(),
+                href: self.node(child),
+                count,
+                current: false,
+                filter: if has_entries {
+                    child.id.clone()
+                } else {
+                    String::new()
+                },
+            });
+        }
+        pills
+    }
+
+    /// A leaf's siblings, itself marked current; nothing if the parent is outside the target.
+    fn sibling_pills(&self, node: &Node) -> Vec<Pill> {
+        let Some(parent) = node.parent.as_deref().map(|p| self.site.tree.node(p)) else {
+            return Vec::new();
         };
-        ids.iter()
-            .map(|id| {
-                let n = self.tree.node(id);
-                MenuItem {
-                    label: n.label.clone(),
-                    href: self.node(n),
-                    current: Some(id.as_str()) == current,
-                }
+        if self.local_path(parent).is_none() || parent.children.len() < 2 {
+            return Vec::new();
+        }
+        parent
+            .children
+            .iter()
+            .map(|id| self.site.tree.node(id))
+            .filter(|n| n.id == node.id || self.site.count(n) > 0)
+            .map(|n| Pill {
+                label: n.label.clone(),
+                href: self.node(n),
+                count: self.site.count(n),
+                current: n.id == node.id,
+                filter: String::new(),
             })
             .collect()
+    }
+
+    fn card(&self, node: &Node, e: &Entry, group: Option<&Node>) -> Card {
+        let href = format!("{}{}/", self.node(node), e.slug);
+        Card {
+            image: e
+                .fm
+                .card
+                .as_ref()
+                .or(e.fm.banner.as_ref())
+                .map(|c| format!("{href}{c}")),
+            href,
+            title: e.fm.title.clone(),
+            description: e.fm.description.clone(),
+            date: e.date.clone(),
+            label: group.map(|g| g.label.clone()).unwrap_or_default(),
+            filter: group.map(|g| g.id.clone()).unwrap_or_default(),
+            draft: e.draft,
+        }
+    }
+
+    fn album(&self, music: &Node, a: &crate::content::Album) -> AlbumCard {
+        let base = self.node(music);
+        AlbumCard {
+            title: a.title.clone(),
+            artist: a.artist.clone(),
+            link: a.link.clone(),
+            cover: a.cover.as_ref().map(|c| format!("{base}{c}")),
+            artist_href: a.artist_page.as_ref().map(|p| format!("{base}{p}/")),
+        }
     }
 }
 
 fn host_of(url: &str) -> &str {
     url.split("://").nth(1).unwrap_or(url).trim_end_matches('/')
+}
+
+fn rel(content: &Content, path: &Path) -> String {
+    format!(
+        "content/{}",
+        path.strip_prefix(&content.root).unwrap_or(path).display()
+    )
+}
+
+fn rel_entry(site: &Site, e: &Entry) -> String {
+    rel(site.content, &e.dir.join("index.md"))
 }
 
 fn write(path: &Path, contents: &str) -> Result<()> {
@@ -213,61 +694,144 @@ fn write(path: &Path, contents: &str) -> Result<()> {
     fs::write(path, contents).map_err(|e| Error::io(path, e))
 }
 
+/// Copies an entry's assets (everything but index.md and `drafts/`), hard-linking where possible.
+fn copy_dir(src: &Path, dst: &Path) -> Result<()> {
+    fs::create_dir_all(dst).map_err(|e| Error::io(dst, e))?;
+    for entry in fs::read_dir(src).map_err(|e| Error::io(src, e))? {
+        let entry = entry.map_err(|e| Error::io(src, e))?;
+        let name = entry.file_name();
+        let from = entry.path();
+        if name == "index.md" || name.to_string_lossy().starts_with('.') {
+            continue;
+        }
+        let to = dst.join(&name);
+        if from.is_dir() {
+            copy_dir(&from, &to)?;
+        } else if fs::hard_link(&from, &to).is_err() {
+            fs::copy(&from, &to).map_err(|e| Error::io(&from, e))?;
+        }
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::content::tests::{entry, tree, write as put};
 
-    fn tree() -> Tree {
-        Tree::load(Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/site.toml"))).unwrap()
+    fn fixture() -> (tempfile::TempDir, Tree, Content) {
+        let dir = tempfile::tempdir().unwrap();
+        let r = dir.path();
+        put(
+            r,
+            "curations/tastes/tea/assam/index.md",
+            &entry("Assam", "2010-01-01"),
+        );
+        put(
+            r,
+            "curations/tastes/tea/ceylon/index.md",
+            &entry("Ceylon", "2012-01-01"),
+        );
+        put(
+            r,
+            "curations/tastes/tea/drafts/oolong/index.md",
+            &entry("Oolong", "2013-01-01"),
+        );
+        put(
+            r,
+            "curations/sounds/music/gogo/index.md",
+            &entry("GoGo Penguin", "2021-11-20"),
+        );
+        put(r, "curations/sounds/music/gogo/cover.jpg", "jpg");
+        put(
+            r,
+            "curations/sounds/music/albums.toml",
+            "[[album]]\ntitle = \"Man Made Object\"\nartist = \"GoGo Penguin\"\ncover = \"gogo/cover.jpg\"\nartist_page = \"gogo\"\n",
+        );
+        put(
+            r,
+            "considerations/expositions/semiotics/index.md",
+            &entry("Semiotics", "2024-06-15"),
+        );
+        put(
+            r,
+            "considerations/expositions/cats/index.md",
+            "+++\ntitle = \"Cats\"\ndate = 2024-01-01\ndescription = \"x\"\n+++\nSee [semiotics](@/considerations/expositions/semiotics/) and [tea](@/curations/tastes/tea/assam/#notes).\n",
+        );
+        let t = tree();
+        let c = Content::load(r, &t).unwrap();
+        (dir, t, c)
     }
 
     #[test]
     fn monolith_urls_are_paths() {
-        let t = tree();
-        let u = Urls {
-            tree: &t,
-            target: &Target::Monolith,
-        };
+        let (_d, t, c) = fixture();
+        let site = Site::new(&t, &c, false).unwrap();
+        let u = Urls::new(&site, &Target::Monolith);
         assert_eq!(u.node(t.node("curations")), "/curations/");
         assert_eq!(u.node(t.node("music")), "/curations/sounds/music/");
     }
 
     #[test]
     fn breakout_urls_reroot_and_leave_the_subtree_absolute() {
-        let t = tree();
-        let target = Target::Breakout("sounds".into());
-        let u = Urls {
-            tree: &t,
-            target: &target,
-        };
-        assert_eq!(u.node(t.node("sounds")), "/");
-        assert_eq!(u.node(t.node("music")), "/music/");
+        let (_d, t, c) = fixture();
+        let site = Site::new(&t, &c, false).unwrap();
+        let target = Target::Breakout("tastes".into());
+        let u = Urls::new(&site, &target);
+        assert_eq!(u.node(t.node("tastes")), "/");
+        assert_eq!(u.node(t.node("tea")), "/tea/");
         assert_eq!(
-            u.node(t.node("tastes")),
-            "https://joshafairhead.com/curations/tastes/"
+            u.node(t.node("sounds")),
+            "https://joshafairhead.com/curations/sounds/"
+        );
+        let html = u
+            .resolve(r#"<a href="@/curations/tastes/tea/assam/#notes">"#)
+            .unwrap();
+        assert_eq!(html, r#"<a href="/tea/assam/#notes">"#);
+        let html = u
+            .resolve(r#"<a href="@/considerations/expositions/semiotics/">"#)
+            .unwrap();
+        assert_eq!(
+            html,
+            r#"<a href="https://joshafairhead.com/considerations/expositions/semiotics/">"#
+        );
+    }
+
+    #[test]
+    fn links_to_drafts_do_not_resolve() {
+        let (_d, t, c) = fixture();
+        let site = Site::new(&t, &c, false).unwrap();
+        let u = Urls::new(&site, &Target::Monolith);
+        assert!(
+            u.resolve(r#"<a href="@/curations/tastes/tea/oolong/">"#)
+                .is_err()
+        );
+        let with_drafts = Site::new(&t, &c, true).unwrap();
+        let u = Urls::new(&with_drafts, &Target::Monolith);
+        assert!(
+            u.resolve(r#"<a href="@/curations/tastes/tea/oolong/">"#)
+                .is_ok()
         );
     }
 
     #[test]
     fn breakout_crumbs_start_at_the_broken_out_node() {
-        let t = tree();
+        let (_d, t, c) = fixture();
+        let site = Site::new(&t, &c, false).unwrap();
         let target = Target::Breakout("sounds".into());
-        let u = Urls {
-            tree: &t,
-            target: &target,
-        };
+        let u = Urls::new(&site, &target);
+        let music = t.node("music");
         let crumbs: Vec<_> = u
-            .crumbs(t.node("music"))
+            .chrome(music, &music.lineage[..2])
+            .crumbs
             .into_iter()
             .map(|c| c.label)
             .collect();
         assert_eq!(crumbs, ["Sounds"]);
-        let mono = Urls {
-            tree: &t,
-            target: &Target::Monolith,
-        };
+        let mono = Urls::new(&site, &Target::Monolith);
         let crumbs: Vec<_> = mono
-            .crumbs(t.node("music"))
+            .chrome(music, &music.lineage[..2])
+            .crumbs
             .into_iter()
             .map(|c| c.label)
             .collect();
@@ -275,31 +839,61 @@ mod tests {
     }
 
     #[test]
-    fn leaf_menu_shows_siblings_with_current_marked() {
-        let t = tree();
-        let u = Urls {
-            tree: &t,
-            target: &Target::Monolith,
-        };
-        let menu = u.menu(t.node("media"));
-        let current: Vec<_> = menu
-            .iter()
-            .filter(|m| m.current)
-            .map(|m| m.label.as_str())
+    fn pills_hide_empty_nodes_and_count_subtrees() {
+        let (_d, t, c) = fixture();
+        let site = Site::new(&t, &c, false).unwrap();
+        let u = Urls::new(&site, &Target::Monolith);
+        let pills: Vec<_> = u
+            .child_pills(t.node("curations"))
+            .into_iter()
+            .map(|p| (p.label, p.count))
             .collect();
-        assert_eq!(menu.len(), 4);
-        assert_eq!(current, ["Media"]);
-        assert!(
-            u.menu(t.node("music")).is_empty(),
-            "faceted leaves show facets instead"
+        assert_eq!(
+            pills,
+            [
+                ("All".into(), 3),
+                ("Sounds".into(), 1),
+                ("Tastes".into(), 2)
+            ]
         );
+        let current: Vec<_> = u
+            .sibling_pills(t.node("expositions"))
+            .into_iter()
+            .filter(|p| p.current)
+            .map(|p| p.label)
+            .collect();
+        assert_eq!(current, ["Expositions"]);
+    }
+
+    #[test]
+    fn builds_monolith_and_breakout_with_assets_and_passing_links() {
+        let (_d, t, c) = fixture();
+        let site = Site::new(&t, &c, false).unwrap();
+        let out = tempfile::tempdir().unwrap();
+        let mono = build(&site, &Target::Monolith, out.path()).unwrap();
+        assert!(mono.join("curations/sounds/music/gogo/cover.jpg").is_file());
+        assert!(
+            !mono.join("curations/tastes/tea/oolong").exists(),
+            "drafts are not built"
+        );
+        let page =
+            fs::read_to_string(mono.join("considerations/expositions/cats/index.html")).unwrap();
+        assert!(
+            page.contains(r#"href="/curations/tastes/tea/assam/#notes""#),
+            "{page}"
+        );
+        let tastes = build(&site, &Target::Breakout("tastes".into()), out.path()).unwrap();
+        assert!(tastes.join("tea/assam/index.html").is_file());
+        crate::links::check(&mono, &t.site.base_url, None).unwrap();
+        crate::links::check(&tastes, &t.site.base_url, Some(&mono)).unwrap();
     }
 
     #[test]
     fn breakout_of_a_non_breakout_node_is_refused() {
-        let t = tree();
+        let (_d, t, c) = fixture();
+        let site = Site::new(&t, &c, false).unwrap();
         let out = tempfile::tempdir().unwrap();
-        let err = build(&t, &Target::Breakout("media".into()), out.path()).unwrap_err();
+        let err = build(&site, &Target::Breakout("media".into()), out.path()).unwrap_err();
         assert!(matches!(err, Error::NotABreakout(_)));
     }
 }

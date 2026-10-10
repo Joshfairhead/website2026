@@ -7,13 +7,34 @@ One content pool is built as a **monolith** (the whole tree under `joshafairhead
 ## Use
 
 ```sh
+cargo run --release -- build                    # monolith -> dist/monolith
+cargo run --release -- build --drafts           # include drafts (local preview only)
+python3 -m http.server -d dist/monolith         # then open http://localhost:8000
+```
+
+Other targets:
+
+```sh
 cargo run -- build                    # monolith -> dist/monolith
 cargo run -- build --breakout sounds  # one breakout -> dist/sounds
 cargo run -- build --all              # monolith + every breakout
 cargo run -- check                    # validate, build everything to a temp dir, check links
 ```
 
-Every build validates `site.toml` and fails on unknown keys, bad ids, unknown parents, a tree deeper than branch › category › instance, duplicate breakout hosts, or any internal link that does not resolve.
+Every build validates `site.toml` and `content/` and fails, naming the file, on: unknown or missing front-matter fields, bad dates, missing card/banner/cover/art files, entries outside a leaf node, unknown shortcodes, malformed URLs, links from published pages to drafts, and any internal link or image that does not resolve in the built output.
+
+## Content
+
+```
+content/for/<org>.md                    recipient cards (/for/<org>/)
+content/<node path>/<slug>/index.md     an entry; its images sit beside it
+content/<node path>/drafts/<slug>/      drafts of that node (not published)
+content/drafts/<slug>/                  drafts with no node yet
+content/curations/sounds/music/albums.toml, tracks.toml
+content/curations/sights/art/items.toml, images/
+```
+
+Front matter (`+++` TOML): `title`, `date` (YYYY-MM-DD) and `description` are required; `tags`, `card`, `banner` and `toc` are optional. Link to another page with `@/<node path>/<slug>/`; it resolves correctly in the monolith and in every breakout. Shortcodes: `{{ image(url="x.jpg", alt="…") }}`, `{{ youtube(id="…") }}`, `{{ vimeo(id="…") }}`.
 
 ## Checks
 
@@ -35,4 +56,4 @@ cargo run -- build --all
 
 ## Status
 
-Phase P0 (scaffold) is done: the tree, validation, CLI, page shells for every node, the business card root, link checking and CI. Content loading and migration (P1) come next; see the build spec.
+Phases P0–P3 are done: the tree, all content migrated (111 pages, 12 drafts, 64 albums, 14 tracks, 130 artworks, 2 recipient cards), every page type rendered, filters and lightbox, link checking and CI. Deployment (P4) needs Netlify sites and a `NETLIFY_AUTH_TOKEN` secret; see the build spec.

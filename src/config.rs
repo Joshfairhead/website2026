@@ -35,9 +35,18 @@ pub struct NodeConfig {
     pub id: String,
     pub label: String,
     pub parent: Option<String>,
-    #[serde(default)]
-    pub facets: Vec<String>,
+    pub collection: Option<Collection>,
     pub breakout: Option<String>,
+}
+
+/// A node whose content is a data collection rather than (only) entry pages.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Collection {
+    /// Artist entries plus albums.toml and tracks.toml.
+    Music,
+    /// items.toml plus images/.
+    Art,
 }
 
 /// A validated node with its resolved place in the tree.
@@ -47,7 +56,7 @@ pub struct Node {
     pub label: String,
     pub parent: Option<String>,
     pub children: Vec<String>,
-    pub facets: Vec<String>,
+    pub collection: Option<Collection>,
     pub breakout: Option<String>,
     /// Ids from the branch down to this node, inclusive.
     pub lineage: Vec<String>,
@@ -61,6 +70,15 @@ impl Node {
     /// Path segments below the monolith root.
     pub fn segments(&self) -> &[String] {
         &self.lineage
+    }
+
+    pub fn is_leaf(&self) -> bool {
+        self.children.is_empty()
+    }
+
+    /// Path below the monolith root, e.g. `curations/sounds/music`.
+    pub fn path(&self) -> String {
+        self.lineage.join("/")
     }
 }
 
@@ -183,7 +201,7 @@ impl Tree {
                     label: n.label.clone(),
                     parent: n.parent.clone(),
                     children,
-                    facets: n.facets.clone(),
+                    collection: n.collection,
                     breakout: n.breakout.clone(),
                     lineage,
                 },
@@ -278,7 +296,7 @@ label = "Creations"
         let music = tree.node("music");
         assert_eq!(music.lineage, ["curations", "sounds", "music"]);
         assert_eq!(music.branch(), "curations");
-        assert_eq!(music.facets, ["artists", "albums", "tracks"]);
+        assert_eq!(music.collection, Some(Collection::Music));
         let breakouts: Vec<_> = tree.breakouts().map(|n| n.id.as_str()).collect();
         assert_eq!(breakouts, ["sights", "sounds", "tastes"]);
     }

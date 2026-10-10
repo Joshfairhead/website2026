@@ -16,6 +16,8 @@ pub enum Error {
     },
     #[error("site.toml is invalid:\n  - {}", .0.join("\n  - "))]
     Invalid(Vec<String>),
+    #[error("content is invalid:\n  - {}", .0.join("\n  - "))]
+    Content(Vec<String>),
     #[error("unknown node `{0}` (see site.toml)")]
     UnknownNode(String),
     #[error("node `{0}` has no breakout host in site.toml")]
