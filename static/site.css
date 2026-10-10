@@ -1,0 +1,71 @@
+/* Website 2026. Tokens mirror the design system:
+   https://claude.ai/artifact/6nFYsUWpdXBHbqCdVQjCAa */
+:root {
+  --surface-100: #ffffff; --surface-200: #fafafa; --surface-300: #eeeeee;
+  --line: #e2e2e2; --ink: #171717; --muted: #5c5c5c;
+  --curations: #157a3c; --considerations: #1d4ed8; --creations: #c0262d; --on-branch: #ffffff;
+  --font-display: Philosopher, "Trebuchet MS", sans-serif;
+  --font-body: Mulish, "Helvetica Neue", Arial, sans-serif;
+  --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px;
+  --space-5: 24px; --space-6: 32px; --space-7: 48px; --space-8: 64px;
+  --radius-sm: 4px; --radius-md: 6px; --radius-lg: 16px; --radius-pill: 999px;
+  --measure: 65ch; --card-min: 260px; --page-max: 1200px;
+  --branch: var(--ink);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --surface-100: #121212; --surface-200: #1b1b1b; --surface-300: #262626;
+    --line: #2e2e2e; --ink: #ededed; --muted: #a3a3a3;
+    --curations: #4ade80; --considerations: #82a9f9; --creations: #f87171; --on-branch: #121212;
+    color-scheme: dark;
+  }
+}
+[data-branch="curations"] { --branch: var(--curations); }
+[data-branch="considerations"] { --branch: var(--considerations); }
+[data-branch="creations"] { --branch: var(--creations); }
+
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--surface-100); color: var(--ink); font: 400 17px/28px var(--font-body); }
+a { color: var(--branch); text-decoration: none; }
+a:hover { text-decoration: underline; }
+:focus-visible { outline: 2px solid var(--branch); outline-offset: 2px; border-radius: var(--radius-sm); }
+
+.page { max-width: var(--page-max); margin: 0 auto; padding: var(--space-7) var(--space-4) var(--space-8); display: flex; flex-direction: column; gap: var(--space-5); }
+.title { margin: 0; font: 400 44px/1.05 var(--font-display); text-wrap: balance; }
+.empty { margin: 0; color: var(--muted); font-size: 15px; }
+
+.crumbs { display: flex; flex-wrap: wrap; gap: var(--space-2); margin: 0; padding: 0; list-style: none; font-size: 13px; line-height: 18px; color: var(--muted); }
+.crumbs li { display: flex; gap: var(--space-2); }
+.crumbs li + li::before { content: "›"; }
+.crumbs a { color: var(--muted); }
+.crumbs a:hover { color: var(--branch); }
+.crumbs [aria-current="page"] { color: var(--ink); }
+.crumbs .crumbs__home { margin-left: auto; }
+.crumbs .crumbs__home::before { content: none; }
+
+.level-menu { display: flex; flex-wrap: wrap; gap: var(--space-2); margin: 0; padding: var(--space-3) 0; list-style: none; border-bottom: 1px solid var(--line); }
+.level-menu a { display: inline-flex; gap: 6px; padding: 8px 14px; border-radius: var(--radius-pill); background: var(--surface-300); color: var(--ink); font: 500 14px/18px var(--font-body); }
+.level-menu a:hover { color: var(--branch); text-decoration: none; }
+.level-menu a[aria-current="page"] { background: var(--branch); color: var(--on-branch); }
+
+.chips { display: flex; flex-wrap: wrap; gap: var(--space-2); padding: var(--space-3) 0; border-bottom: 1px solid var(--line); }
+.chip { padding: 8px 14px; border: 1px solid var(--line); border-radius: var(--radius-pill); background: transparent; color: var(--ink); font: 500 14px/18px var(--font-body); text-transform: capitalize; cursor: pointer; }
+.chip[aria-pressed="true"] { background: var(--branch); border-color: var(--branch); color: var(--on-branch); }
+
+/* Business card (root). The drifting colour field is the site's only motion. */
+.biz { position: relative; overflow: hidden; min-height: 100vh; display: grid; place-items: center; padding: var(--space-8) var(--space-4); }
+.biz::before { content: ""; position: absolute; inset: -50%; z-index: 0;
+  background:
+    radial-gradient(circle at 25% 75%, color-mix(in srgb, var(--curations) 22%, transparent) 0%, transparent 38%),
+    radial-gradient(circle at 75% 25%, color-mix(in srgb, var(--considerations) 22%, transparent) 0%, transparent 40%),
+    radial-gradient(circle at 75% 75%, color-mix(in srgb, var(--creations) 18%, transparent) 0%, transparent 40%);
+  animation: biz-drift 18s ease-in-out infinite; }
+@keyframes biz-drift { 0%, 100% { transform: translate(0, 0) rotate(0); } 25% { transform: translate(-4%, -6%) rotate(3deg); } 50% { transform: translate(2%, 4%) rotate(-2deg); } 75% { transform: translate(6%, -3%) rotate(1deg); } }
+@media (prefers-reduced-motion: reduce) { .biz::before { animation: none; } }
+.biz__card { position: relative; z-index: 1; width: min(100%, 440px); display: flex; flex-direction: column; gap: var(--space-4); padding: var(--space-6); background: var(--surface-200); border: 1px solid var(--line); border-radius: var(--radius-lg); }
+.biz__name { margin: 0; font: 400 clamp(44px, 9vw, 64px)/1 var(--font-display); letter-spacing: -0.01em; }
+.biz__rule { height: 1px; margin: 0; border: 0; background: var(--line); }
+.biz__triad { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-2); margin: 0; padding: 0; list-style: none; font: 600 15px/20px var(--font-body); }
+.biz__triad li + li::before { content: "·"; color: var(--muted); margin-right: var(--space-2); }
+.biz__triad a[data-branch] { color: var(--branch); }
+.biz__contact { font-size: 13px; line-height: 18px; color: var(--muted); user-select: all; }

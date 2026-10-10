@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block body %}
+<main class="biz">
+  <div class="biz__card">
+    <h1 class="biz__name">{{ title }}</h1>
+    <hr class="biz__rule">
+    <nav aria-label="Branches">
+      <ul class="biz__triad">
+        {% for b in branches %}
+        <li><a href="{{ b.href }}" data-branch="{{ b.id }}">{{ b.label }}</a></li>
+        {% endfor %}
+      </ul>
+    </nav>
+    <span class="biz__contact">{{ contact }}</span>
+  </div>
+</main>
+{% endblock %}
