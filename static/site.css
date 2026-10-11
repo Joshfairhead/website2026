@@ -73,6 +73,7 @@ a:hover { text-decoration: underline; }
 .biz__triad { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-2); margin: 0; padding: 0; list-style: none; font: 600 15px/20px var(--font-body); }
 .biz__triad li + li::before { content: "·"; color: var(--muted); margin-right: var(--space-2); }
 .biz__triad a[data-branch] { color: var(--branch); }
+.biz__home { font-weight: 600; font-size: 15px; }
 .biz__contact { font-size: 13px; line-height: 18px; color: var(--muted); user-select: all; }
 
 .biz--still::before { content: none; }

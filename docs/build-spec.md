@@ -110,7 +110,7 @@ Listings sort by date, newest first, by default. Client-side sort (date / title)
 - **Re-rooting:** in a breakout, the node is the root. The breadcrumb starts there, with one "part of joshafairhead.com" link up to the monolith. Links to entries outside the subtree point at their monolith URL. Link validation runs per target.
 - **Canonical URLs:** a page's canonical is its monolith URL, so search engines don't treat breakouts as duplicates. *(Can flip to the breakout URL per node if you prefer.)*
 - **Local preview:** `serve` previews the monolith, and `serve --breakout sights` previews one breakout, both on `localhost`.
-- **Hosting:** Netlify, with one Netlify site per target (the monolith on `joshafairhead.com`, each breakout on its subdomain). GitHub Actions builds and checks every target; only a green `main` deploys the prebuilt outputs via the Netlify CLI (needs a `NETLIFY_AUTH_TOKEN` secret). Netlify never compiles anything.
+- **Hosting:** Netlify, one Netlify site per target. Each site builds this repo itself (`netlify.toml` for the monolith; breakout sites set `--breakout <id>` and `dist/<id>` in their own settings). Netlify installs the toolchain from `rust-toolchain.toml`, and the build runs the full validation and link check, so a broken build fails and never deploys. CI on GitHub runs the same checks on every push. This replaced the earlier plan of deploying from GitHub Actions with a `NETLIFY_AUTH_TOKEN`: no secret is needed.
 - **Existing hosts** (`creative.`, `blog.`, `portfolio.`, `tea.`) and their deploys are not touched.
 
 ## 8. Quality gates (CI on every push / PR)
@@ -150,7 +150,7 @@ The migrated content must pass §5 before Zola files are removed.
 | P1 Model ✅ | `site.toml`, schemas, loader, validation, migration | All 111 pages + records load; validation passes; deliberate bad fixtures fail with clear errors |
 | P2 Render ✅ | Templates, menus, breadcrumbs, listings, entry pages, shortcodes | Every node and entry renders; link check passes; snapshots reviewed |
 | P3 Collections ✅ | Art gallery, music facets, recipient cards | 130 images, 64 albums and 14 tracks render with filters; works without JS |
-| P4 Deploy | Netlify sites for the monolith + first breakouts (Sights, Sounds, Tastes), deploy via Actions, DNS | `joshafairhead.com` serves the monolith, and each breakout host serves its subtree standalone |
+| P4 Deploy | `netlify.toml` ✅; link the joshafairhead.com Netlify site to this repo; breakout sites + DNS | `joshafairhead.com` serves the monolith, and each breakout host serves its subtree standalone |
 | P5 Cleanup | Point `joshafairhead.com` at the new monolith (replacing the `hub` deploy) | The hub is superseded; the old Zola hosts are left untouched |
 
 ## 11. Decided / open

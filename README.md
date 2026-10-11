@@ -56,4 +56,4 @@ cargo run -- build --all
 
 ## Status
 
-Phases P0–P3 are done: the tree, all content migrated (111 pages, 12 drafts, 64 albums, 14 tracks, 130 artworks, 2 recipient cards), every page type rendered, filters and lightbox, link checking and CI. Deployment (P4) needs Netlify sites and a `NETLIFY_AUTH_TOKEN` secret; see the build spec.
+Phases P0–P3 are done: the tree, all content migrated (111 pages, 12 drafts, 64 albums, 14 tracks, 130 artworks, 2 recipient cards), every page type rendered, filters and lightbox, link checking and CI. Deployment: `netlify.toml` builds the monolith on Netlify; breakout sites use the same repo with `--breakout <id>` (see the build spec).

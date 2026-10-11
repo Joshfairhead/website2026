@@ -193,6 +193,14 @@ struct Chrome {
 }
 
 #[derive(Template)]
+#[template(path = "404.html")]
+struct NotFoundPage<'a> {
+    title: &'a str,
+    home: String,
+    host: &'a str,
+}
+
+#[derive(Template)]
 #[template(path = "listing.html")]
 struct ListingPage {
     chrome: Chrome,
@@ -337,6 +345,12 @@ pub fn build(site: &Site, target: &Target, out: &Path) -> Result<PathBuf> {
         }
     }
 
+    let not_found = NotFoundPage {
+        title: &tree.site.title,
+        home: format!("{}/", tree.site.base_url),
+        host: host_of(&tree.site.base_url),
+    };
+    write(&dir.join("404.html"), &not_found.render()?)?;
     write(&dir.join("site.css"), STYLESHEET)?;
     write(&dir.join("site.js"), SCRIPT)?;
     Ok(dir)

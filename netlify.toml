@@ -1,0 +1,12 @@
+# joshafairhead.com: the monolith. Netlify installs the toolchain pinned in
+# rust-toolchain.toml; the build validates all content and checks every link,
+# so a broken build fails here and never deploys.
+[build]
+  command = "cargo run --locked --release -- build"
+  publish = "dist/monolith"
+
+# Breakout sites (sights., sounds., tastes.) are separate Netlify sites built
+# from this same repo with their own command and publish folder, e.g.
+#   command = "cargo run --locked --release -- build --breakout sounds"
+#   publish = "dist/sounds"
+# set in each site's UI settings (they override this file's [build]).
