@@ -1,0 +1,11 @@
+<nav aria-label="Breadcrumb">
+  <ol class="crumbs">
+    {% for c in chrome.crumbs %}
+    <li><a href="{{ c.href }}">{{ c.label }}</a></li>
+    {% endfor %}
+    <li><span aria-current="page">{{ title }}</span></li>
+    {% if let Some(h) = chrome.home %}
+    <li class="crumbs__home"><a href="{{ h.href }}">{{ h.label }}</a></li>
+    {% endif %}
+  </ol>
+</nav>

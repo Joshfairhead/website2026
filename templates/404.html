@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}Not found · {{ title }}{% endblock %}
+{% block body %}
+<main class="biz biz--still">
+  <div class="biz__card">
+    <h1 class="biz__name">Not found</h1>
+    <hr class="biz__rule">
+    <p class="biz__tagline">There's nothing at this address.</p>
+    <a class="biz__home" href="{{ home }}">{{ host }}</a>
+  </div>
+</main>
+{% endblock %}

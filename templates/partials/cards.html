@@ -1,0 +1,13 @@
+<div class="card-grid">
+  {% for c in cards %}
+  <a class="entry-card" href="{{ c.href }}"{% if !c.filter.is_empty() %} data-group="{{ c.filter }}"{% endif %}>
+    {% if let Some(img) = c.image %}<img class="entry-card__img" src="{{ img }}" alt="" loading="lazy" decoding="async">{% else %}<div class="entry-card__img" aria-hidden="true"></div>{% endif %}
+    <div class="entry-card__body">
+      {% if !c.label.is_empty() %}<span class="entry-card__label">{{ c.label }}</span>{% endif %}
+      <h2 class="entry-card__title">{{ c.title }}</h2>
+      <p class="entry-card__desc">{{ c.description }}</p>
+      <span class="entry-card__meta">{{ c.date }}{% if c.draft %} · Draft{% endif %}</span>
+    </div>
+  </a>
+  {% endfor %}
+</div>

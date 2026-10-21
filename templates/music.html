@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}{{ title }} · {{ chrome.site_title }}{% endblock %}
+{% block body_attrs %} data-branch="{{ chrome.branch }}"{% endblock %}
+{% block body %}
+<main class="page">
+  {% include "partials/crumbs.html" %}
+  <h1 class="title">{{ title }}</h1>
+  {% include "partials/pills.html" %}
+  <nav class="chips" aria-label="Music" data-facets>
+    <a class="chip" href="#artists" data-facet="artists">Artists <span class="n">{{ artists.len() }}</span></a>
+    <a class="chip" href="#albums" data-facet="albums">Albums <span class="n">{{ albums.len() }}</span></a>
+    <a class="chip" href="#tracks" data-facet="tracks">Tracks <span class="n">{{ tracks.len() }}</span></a>
+  </nav>
+  <section id="artists" class="facet" aria-label="Artists">
+    <h2 class="facet__title">Artists</h2>
+    {% let cards = artists %}
+    {% include "partials/cards.html" %}
+  </section>
+  <section id="albums" class="facet" aria-label="Albums">
+    <h2 class="facet__title">Albums</h2>
+    {% include "partials/albums.html" %}
+  </section>
+  <section id="tracks" class="facet" aria-label="Tracks">
+    <h2 class="facet__title">Tracks</h2>
+    <ol class="tracks">
+      {% for t in tracks %}
+      <li>{% if let Some(l) = t.link %}<a href="{{ l }}" rel="noopener">{{ t.title }}</a>{% else %}<span>{{ t.title }}</span>{% endif %} <span class="tracks__artist">{{ t.artist }}</span></li>
+      {% endfor %}
+    </ol>
+  </section>
+</main>
+{% endblock %}

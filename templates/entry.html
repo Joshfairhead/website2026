@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}{{ title }} · {{ chrome.site_title }}{% endblock %}
+{% block meta %}<meta name="description" content="{{ description }}">{% endblock %}
+{% block body_attrs %} data-branch="{{ chrome.branch }}"{% endblock %}
+{% block body %}
+<main class="page page--entry">
+  {% include "partials/crumbs.html" %}
+  <header class="entry__head">
+    <h1 class="title">{{ title }}</h1>
+    <p class="entry__desc">{{ description }}</p>
+    <p class="entry__meta">{{ date }} · {{ minutes }} min read{% if draft %} · Draft{% endif %}{% for t in tags %} · {{ t }}{% endfor %}</p>
+  </header>
+  {% if let Some(b) = banner %}<img class="entry__banner" src="{{ b }}" alt="">{% endif %}
+  {% if !toc.is_empty() %}
+  <nav class="toc" aria-label="Contents">
+    <ol>
+      {% for h in toc %}<li class="toc__l{{ h.level }}"><a href="#{{ h.id }}">{{ h.text }}</a></li>{% endfor %}
+    </ol>
+  </nav>
+  {% endif %}
+  <article class="prose" data-lightbox>
+    {{ body|safe }}
+  </article>
+  {% if !albums.is_empty() %}
+  <section class="entry__albums" aria-label="Albums">
+    <h2>Albums</h2>
+    {% include "partials/albums.html" %}
+  </section>
+  {% endif %}
+  {% if newer.is_some() || older.is_some() %}
+  <nav class="pager" aria-label="More">
+    {% if let Some(n) = newer %}<a class="pager__newer" href="{{ n.href }}">← {{ n.label }}</a>{% else %}<span></span>{% endif %}
+    {% if let Some(o) = older %}<a class="pager__older" href="{{ o.href }}">{{ o.label }} →</a>{% endif %}
+  </nav>
+  {% endif %}
+</main>
+{% endblock %}

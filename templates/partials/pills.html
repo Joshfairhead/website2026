@@ -1,0 +1,7 @@
+{% if !pills.is_empty() %}
+<nav class="level-menu" aria-label="{{ title }}" data-pills>
+  {% for p in pills %}
+  <a class="pill" href="{{ p.href }}"{% if p.current %} aria-current="page"{% endif %}{% if !p.filter.is_empty() %} data-filter="{{ p.filter }}"{% endif %}>{{ p.label }} <span class="n">{{ p.count }}</span></a>
+  {% endfor %}
+</nav>
+{% endif %}

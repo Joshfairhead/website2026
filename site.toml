@@ -1,0 +1,119 @@
+# The site tree: single source of truth for nodes, menus, breadcrumbs and breakouts.
+# See docs/information-architecture.md.
+#
+# Each [[node]] has:
+#   id        unique slug; also its path segment
+#   label     display name
+#   parent    id of the parent node (omit for a branch, which sits under the root)
+#   collection  "music" or "art" for nodes whose content includes data files
+#   breakout  optional host this node's subtree is deployed to as its own site
+
+[site]
+title = "Josh Fairhead"
+base_url = "https://joshafairhead.com"
+contact = "hello@joshafairhead.com"
+
+# Curations
+[[node]]
+id = "curations"
+label = "Curations"
+
+[[node]]
+id = "sights"
+label = "Sights"
+parent = "curations"
+breakout = "sights.joshafairhead.com"
+
+[[node]]
+id = "art"
+label = "Art"
+parent = "sights"
+collection = "art"
+
+[[node]]
+id = "sounds"
+label = "Sounds"
+parent = "curations"
+breakout = "sounds.joshafairhead.com"
+
+[[node]]
+id = "music"
+label = "Music"
+parent = "sounds"
+collection = "music"
+
+[[node]]
+id = "tastes"
+label = "Tastes"
+parent = "curations"
+breakout = "tastes.joshafairhead.com"
+
+[[node]]
+id = "tea"
+label = "Tea"
+parent = "tastes"
+
+[[node]]
+id = "thoughts"
+label = "Thoughts"
+parent = "curations"
+
+[[node]]
+id = "books"
+label = "Books"
+parent = "thoughts"
+
+[[node]]
+id = "experiences"
+label = "Experiences"
+parent = "curations"
+
+[[node]]
+id = "travel"
+label = "Travel"
+parent = "experiences"
+
+# Considerations
+[[node]]
+id = "considerations"
+label = "Considerations"
+
+[[node]]
+id = "expositions"
+label = "Expositions"
+parent = "considerations"
+
+[[node]]
+id = "retrospectives"
+label = "Retrospectives"
+parent = "considerations"
+
+[[node]]
+id = "practices"
+label = "Practices"
+parent = "considerations"
+
+# Creations
+[[node]]
+id = "creations"
+label = "Creations"
+
+[[node]]
+id = "software"
+label = "Software"
+parent = "creations"
+
+[[node]]
+id = "recordings"
+label = "Recordings"
+parent = "creations"
+
+[[node]]
+id = "media"
+label = "Media"
+parent = "creations"
+
+[[node]]
+id = "ventures"
+label = "Ventures"
+parent = "creations"
