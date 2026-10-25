@@ -10,7 +10,7 @@
     <p class="entry__desc">{{ description }}</p>
     <p class="entry__meta">{{ date }} · {{ minutes }} min read{% if draft %} · Draft{% endif %}{% for t in tags %} · {{ t }}{% endfor %}</p>
   </header>
-  {% if let Some(b) = banner %}<img class="entry__banner" src="{{ b }}" alt="">{% endif %}
+  {% if let Some(b) = banner %}<img class="entry__banner"{{ b|safe }} alt="" fetchpriority="high">{% endif %}
   {% if !toc.is_empty() %}
   <nav class="toc" aria-label="Contents">
     <ol>

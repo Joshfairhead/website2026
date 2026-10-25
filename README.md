@@ -21,6 +21,8 @@ cargo run -- build --all              # monolith + every breakout
 cargo run -- check                    # validate, build everything to a temp dir, check links
 ```
 
+Images: every photo gets 480 px and 1200 px copies used by `srcset`; originals open in the lightbox. Copies are cached in `.cache/images/` (safe to delete).
+
 Every build validates `site.toml` and `content/` and fails, naming the file, on: unknown or missing front-matter fields, bad dates, missing card/banner/cover/art files, entries outside a leaf node, unknown shortcodes, malformed URLs, links from published pages to drafts, and any internal link or image that does not resolve in the built output.
 
 ## Content

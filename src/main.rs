@@ -6,6 +6,7 @@
 mod config;
 mod content;
 mod error;
+mod images;
 mod links;
 mod markdown;
 mod render;
@@ -80,17 +81,22 @@ fn run(cli: Cli) -> Result<()> {
                 (None, true) => all_targets(&tree),
                 (None, false) => vec![Target::Monolith],
             };
-            let site = Site::new(&tree, &content, drafts)?;
+            let site = Site::new(&tree, &content, drafts, &cache_dir())?;
             build_and_check(&site, &targets, &out)
         }
         Command::Check => {
             let tmp = tempfile::tempdir().map_err(|e| error::Error::io(Path::new("<temp>"), e))?;
-            let site = Site::new(&tree, &content, false)?;
+            let site = Site::new(&tree, &content, false, &cache_dir())?;
             build_and_check(&site, &all_targets(&tree), tmp.path())?;
             println!("check passed");
             Ok(())
         }
     }
+}
+
+/// Scaled images, keyed by content; safe to delete at any time.
+fn cache_dir() -> PathBuf {
+    PathBuf::from(".cache/images")
 }
 
 fn all_targets(tree: &Tree) -> Vec<Target> {
