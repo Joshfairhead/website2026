@@ -2,7 +2,7 @@
   {% for a in albums %}
   <figure class="album">
     {% if let Some(l) = a.link %}<a href="{{ l }}" rel="noopener">{% endif %}
-    {% if let Some(c) = a.cover %}<img class="album__cover" src="{{ c }}" alt="" loading="lazy" decoding="async">{% else %}<div class="album__cover album__cover--none">No cover yet</div>{% endif %}
+    {% if let Some(c) = a.cover %}<img class="album__cover"{{ c|safe }} alt="" loading="lazy" decoding="async">{% else %}<div class="album__cover album__cover--none">No cover yet</div>{% endif %}
     {% if a.link.is_some() %}</a>{% endif %}
     <figcaption><span class="album__title">{{ a.title }}</span>{% if let Some(h) = a.artist_href %}<a class="album__artist" href="{{ h }}">{{ a.artist }}</a>{% else %}<span class="album__artist">{{ a.artist }}</span>{% endif %}</figcaption>
   </figure>

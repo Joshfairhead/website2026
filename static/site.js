@@ -73,7 +73,7 @@
     let i = 0;
     const open = (n) => {
       i = (n + set.length) % set.length;
-      img.src = set[i].currentSrc || set[i].src;
+      img.src = set[i].dataset.full || set[i].currentSrc || set[i].src;
       img.alt = set[i].alt;
       if (!box.open) box.showModal();
     };

@@ -255,7 +255,7 @@ def main():
         shutil.copy2(args.art / it["file"], art / "images" / name)
     write_records(art / "items.toml", "item", [
         {"id": it["id"], "group": it["section"], "artist": it["artist"], "title": it["title"],
-         "source": it.get("source") or None, "width": it["w"], "height": it["h"],
+         "source": it.get("source") or None,
          "file": f"images/{Path(it['file']).name}"} for it in items])
 
     # Hub recipient cards.

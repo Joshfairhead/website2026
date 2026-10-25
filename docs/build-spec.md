@@ -16,7 +16,7 @@ Inputs: [`information-architecture.md`](information-architecture.md) and [`conte
 **Non-goals (v1)**
 - Visual design (a separate pass; v1 ships a clean, neutral theme).
 - CMS or editing UI, comments, search, RSS.
-- Image resizing pipelines: images are copied as-is. Thumbnails can come later.
+- Image formats beyond JPEG/PNG for scaled copies (WebP/AVIF output could come later).
 
 ## 2. Stack
 
@@ -87,6 +87,14 @@ A content folder's path *is* its node. An entry outside a node declared in `site
 7. Anything under `drafts/` linked from published content.
 
 Empty nodes produce a warning, not an error, and are hidden from menus.
+
+## 6a. Images
+
+Every JPEG, PNG and WebP in published content gets scaled copies at 480 px and 1200 px wide (`src/images.rs`), never larger than the original. Pages use them through `srcset`/`sizes` with `width`/`height` set, so the browser fetches the smallest copy that fits and the layout doesn't shift; the lightbox opens the original (`data-full`). Copies are JPEG at quality 78, or PNG when the image is actually transparent, with EXIF orientation applied.
+
+Copies are cached in `.cache/images/`, keyed by the original's content, and hard-linked into each target. A cold build makes about 2,500 images' copies in roughly a minute on four cores; a warm build skips them. An image that can't be decoded fails the build, and the link check covers every `srcset` entry.
+
+`netlify.toml` caches images in browsers for a week and revalidates the stylesheet and script on every visit.
 
 ## 6. Pages rendered
 

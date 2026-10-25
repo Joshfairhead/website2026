@@ -33,7 +33,7 @@ pub fn check(dir: &Path, base_url: &str, monolith: Option<&Path>) -> Result<()> 
                     None => continue,
                 }
             } else if link.starts_with('/') && !link.starts_with("//") {
-                resolve(dir, &link)
+                resolve(dir, &percent_decode(&link))
             } else if is_relative(&link) {
                 let page_dir = page.parent().unwrap_or(dir);
                 let target = resolve(page_dir, &percent_decode(&link));
@@ -102,15 +102,25 @@ fn percent_decode(s: &str) -> String {
     String::from_utf8_lossy(&out).into_owned()
 }
 
-/// Values of every `href="…"` and `src="…"` attribute.
+/// Values of every `href`, `src`, `data-full` and `srcset` URL.
 fn attr_values(html: &str) -> Vec<String> {
     let mut out = Vec::new();
-    for attr in ["href=\"", "src=\""] {
+    for attr in [" href=\"", " src=\"", " data-full=\"", " srcset=\""] {
         let mut rest = html;
         while let Some(i) = rest.find(attr) {
             let after = &rest[i + attr.len()..];
             let Some(end) = after.find('"') else { break };
-            out.push(after[..end].replace("&amp;", "&"));
+            let value = after[..end].replace("&amp;", "&");
+            if attr == " srcset=\"" {
+                out.extend(
+                    value
+                        .split(',')
+                        .filter_map(|c| c.split_whitespace().next())
+                        .map(str::to_string),
+                );
+            } else {
+                out.push(value);
+            }
             rest = &after[end..];
         }
     }
@@ -147,16 +157,20 @@ mod tests {
             dir.path().join("index.html"),
             r##"<a href="/a/">ok</a><a href="/missing/">bad</a>
                <a href="https://elsewhere.org/x">ext</a><a href="#top">anchor</a>
-               <a href="mailto:a@b.c">mail</a><img src="pic.jpg"><img src="a/../a/">"##,
+               <a href="mailto:a@b.c">mail</a><img src="pic.jpg"><img src="a/../a/" srcset="a/../a/ 480w, nope.w480.jpg 480w">"##,
         )
         .unwrap();
         let err = check(dir.path(), "https://example.com", None).unwrap_err();
         let Error::Links { problems, .. } = err else {
             panic!("{err:?}")
         };
-        assert_eq!(problems.len(), 2, "{problems:?}");
-        assert!(problems[0].contains("/missing/"));
-        assert!(problems[1].contains("pic.jpg"));
+        assert_eq!(problems.len(), 3, "{problems:?}");
+        assert!(problems.iter().any(|p| p.contains("/missing/")));
+        assert!(problems.iter().any(|p| p.contains("pic.jpg")));
+        assert!(
+            problems.iter().any(|p| p.contains("nope.w480.jpg")),
+            "srcset entries are checked"
+        );
     }
 
     #[test]

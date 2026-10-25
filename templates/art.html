@@ -15,7 +15,7 @@
   <div class="art-grid" data-lightbox>
     {% for f in figures %}
     <figure class="art" data-group="{{ f.group }}">
-      <img src="{{ f.src }}" alt="{{ f.title }}, {{ f.artist }}" width="{{ f.width }}" height="{{ f.height }}" loading="lazy" decoding="async">
+      <img{{ f.img|safe }} alt="{{ f.title }}, {{ f.artist }}" loading="lazy" decoding="async">
       <figcaption><span class="art__title">{{ f.title }}</span><span class="art__artist">{{ f.artist }}</span>{% if let Some(s) = f.source %}<a class="art__source" href="{{ s }}" rel="noopener">Source</a>{% endif %}</figcaption>
     </figure>
     {% endfor %}

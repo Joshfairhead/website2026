@@ -11,11 +11,16 @@ use regex::Regex;
 use crate::config::{Collection, Node, Tree};
 use crate::content::{Content, Entry};
 use crate::error::{Error, Result};
+use crate::images::{self, Images};
 use crate::markdown::{self, Heading, Rendered};
 
 const STYLESHEET: &str = include_str!("../static/site.css");
 const SCRIPT: &str = include_str!("../static/site.js");
 
+static IMG_OR_DIV: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"<img\b[^>]*>|<div\b[^>]*>|</div>").unwrap());
+static SRC_ATTR: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r#"\s(src|width|height)="[^"]*""#).unwrap());
 static AT_LINK: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r##"(href|src)="@/([^"#]*?)/?(#[^"]*)?""##).unwrap());
 
@@ -49,11 +54,13 @@ pub struct Site<'a> {
     pub content: &'a Content,
     pub drafts: bool,
     bodies: HashMap<(String, String), Rendered>,
+    images: Images,
 }
 
 impl<'a> Site<'a> {
-    /// Renders every entry body once, collecting all problems before failing.
-    pub fn new(tree: &'a Tree, content: &'a Content, drafts: bool) -> Result<Self> {
+    /// Renders every entry body and scales every image once, collecting all
+    /// problems before failing. Scaled images are cached in `cache`.
+    pub fn new(tree: &'a Tree, content: &'a Content, drafts: bool, cache: &Path) -> Result<Self> {
         let mut bodies = HashMap::new();
         let mut problems = Vec::new();
         for e in &content.entries {
@@ -73,11 +80,25 @@ impl<'a> Site<'a> {
         if !problems.is_empty() {
             return Err(Error::Content(problems));
         }
+        let mut dirs: Vec<PathBuf> = content
+            .entries
+            .iter()
+            .filter(|e| e.node.is_some() && (drafts || !e.draft))
+            .map(|e| e.dir.clone())
+            .collect();
+        for n in tree
+            .iter()
+            .filter(|n| n.collection == Some(Collection::Art))
+        {
+            dirs.push(content.root.join(n.path()).join("images"));
+        }
+        let images = Images::prepare(&dirs, cache)?;
         Ok(Site {
             tree,
             content,
             drafts,
             bodies,
+            images,
         })
     }
 
@@ -132,6 +153,7 @@ pub struct Card {
     pub title: String,
     pub description: String,
     pub date: String,
+    /// `<img>` attributes for the card image.
     pub image: Option<String>,
     pub label: String,
     pub filter: String,
@@ -142,6 +164,7 @@ pub struct AlbumCard {
     pub title: String,
     pub artist: String,
     pub link: Option<String>,
+    /// `<img>` attributes for the cover.
     pub cover: Option<String>,
     pub artist_href: Option<String>,
 }
@@ -159,13 +182,12 @@ pub struct Chip {
 }
 
 pub struct ArtFigure {
-    pub src: String,
+    /// `<img>` attributes (src, srcset, sizes, width, height, data-full).
+    pub img: String,
     pub title: String,
     pub artist: String,
     pub group: String,
     pub source: Option<String>,
-    pub width: u32,
-    pub height: u32,
 }
 
 #[derive(Template)]
@@ -241,6 +263,7 @@ struct EntryPage<'a> {
     minutes: usize,
     draft: bool,
     tags: &'a [String],
+    /// `<img>` attributes for the banner.
     banner: Option<String>,
     toc: &'a [Heading],
     body: String,
@@ -315,7 +338,7 @@ pub fn build(site: &Site, target: &Target, out: &Path) -> Result<PathBuf> {
             Some(Collection::Art) => {
                 let src = site.content.root.join(node.path()).join("images");
                 if src.is_dir() {
-                    copy_dir(&src, &node_dir.join("images"))?;
+                    copy_dir(&site.images, &src, &node_dir.join("images"))?;
                 }
                 art_page(site, &urls, node, chrome)?
             }
@@ -329,7 +352,7 @@ pub fn build(site: &Site, target: &Target, out: &Path) -> Result<PathBuf> {
         let entries = site.entries(&node.id);
         for (i, e) in entries.iter().enumerate() {
             let out_dir = node_dir.join(&e.slug);
-            copy_dir(&e.dir, &out_dir)?;
+            copy_dir(&site.images, &e.dir, &out_dir)?;
             let html = entry_page(
                 site,
                 &urls,
@@ -430,6 +453,7 @@ fn art_page(site: &Site, urls: &Urls, node: &Node, chrome: Chrome) -> Result<Str
         *n += 1;
     }
     let base = urls.node(node);
+    let art_dir = site.content.root.join(node.path());
     Ok(ArtPage {
         chrome,
         title: node.label.clone(),
@@ -448,13 +472,18 @@ fn art_page(site: &Site, urls: &Urls, node: &Node, chrome: Chrome) -> Result<Str
             .art
             .iter()
             .map(|i| ArtFigure {
-                src: format!("{base}{}", i.file),
+                img: site
+                    .images
+                    .attrs(
+                        &art_dir.join(&i.file),
+                        &format!("{base}{}", i.file),
+                        images::SIZES_GRID,
+                    )
+                    .html(),
                 title: i.title.clone(),
                 artist: i.artist.clone(),
                 group: markdown::slugify(&i.group),
                 source: i.source.clone(),
-                width: i.width,
-                height: i.height,
             })
             .collect(),
     }
@@ -492,9 +521,17 @@ fn entry_page(
         minutes: body.reading_minutes(),
         draft: e.draft,
         tags: &e.fm.tags,
-        banner: e.fm.banner.clone(),
+        banner: e.fm.banner.as_ref().map(|b| {
+            site.images
+                .attrs(
+                    &e.dir.join(b),
+                    &format!("{}{}/{b}", urls.node(node), e.slug),
+                    images::SIZES_COLUMN,
+                )
+                .html()
+        }),
         toc: if e.fm.toc { &body.toc } else { &[] },
-        body: body.html.clone(),
+        body: responsive_body(&body.html, &e.dir, &site.images),
         albums,
         newer: newer.map(link),
         older: older.map(link),
@@ -658,12 +695,12 @@ impl<'a> Urls<'a> {
     fn card(&self, node: &Node, e: &Entry, group: Option<&Node>) -> Card {
         let href = format!("{}{}/", self.node(node), e.slug);
         Card {
-            image: e
-                .fm
-                .card
-                .as_ref()
-                .or(e.fm.banner.as_ref())
-                .map(|c| format!("{href}{c}")),
+            image: e.fm.card.as_ref().or(e.fm.banner.as_ref()).map(|c| {
+                self.site
+                    .images
+                    .attrs(&e.dir.join(c), &format!("{href}{c}"), images::SIZES_GRID)
+                    .html()
+            }),
             href,
             title: e.fm.title.clone(),
             description: e.fm.description.clone(),
@@ -680,10 +717,84 @@ impl<'a> Urls<'a> {
             title: a.title.clone(),
             artist: a.artist.clone(),
             link: a.link.clone(),
-            cover: a.cover.as_ref().map(|c| format!("{base}{c}")),
+            cover: a.cover.as_ref().map(|c| {
+                let src = self.site.content.root.join(music.path()).join(c);
+                self.site
+                    .images
+                    .attrs(&src, &format!("{base}{c}"), images::SIZES_GRID)
+                    .html()
+            }),
             artist_href: a.artist_page.as_ref().map(|p| format!("{base}{p}/")),
         }
     }
+}
+
+/// Points every local `<img>` in an entry body at its scaled copies. Images
+/// inside gallery `<div>`s are sized for the grid, the rest for the column.
+fn responsive_body(html: &str, dir: &Path, images: &Images) -> String {
+    let mut gallery_depth: Vec<bool> = Vec::new();
+    IMG_OR_DIV
+        .replace_all(html, |c: &regex::Captures| {
+            let tag = &c[0];
+            if tag == "</div>" {
+                gallery_depth.pop();
+                return tag.to_string();
+            }
+            if tag.starts_with("<div") {
+                let is_gallery = tag
+                    .split("class=\"")
+                    .nth(1)
+                    .and_then(|r| r.split('"').next())
+                    .is_some_and(|cls| cls.split_whitespace().any(|c| c.contains("gallery")));
+                gallery_depth.push(is_gallery);
+                return tag.to_string();
+            }
+            let Some(src) = tag
+                .split(" src=\"")
+                .nth(1)
+                .and_then(|r| r.split('"').next())
+            else {
+                return tag.to_string();
+            };
+            if src.contains(':') || src.starts_with('/') || src.starts_with('#') {
+                return tag.to_string();
+            }
+            let file = dir.join(decode(&src.replace("&amp;", "&")));
+            if images.get(&file).is_none() {
+                return tag.to_string();
+            }
+            let sizes = if gallery_depth.iter().any(|g| *g) {
+                images::SIZES_GRID
+            } else {
+                images::SIZES_COLUMN
+            };
+            let attrs = images
+                .attrs(&file, &src.replace("&amp;", "&"), sizes)
+                .html();
+            let rest = SRC_ATTR.replace_all(&tag["<img".len()..], "");
+            format!("<img{attrs}{rest}")
+        })
+        .into_owned()
+}
+
+fn decode(s: &str) -> String {
+    let b = s.as_bytes();
+    let mut out = Vec::with_capacity(b.len());
+    let mut i = 0;
+    while i < b.len() {
+        if b[i] == b'%'
+            && i + 2 < b.len()
+            && let Ok(v) =
+                u8::from_str_radix(std::str::from_utf8(&b[i + 1..i + 3]).unwrap_or(""), 16)
+        {
+            out.push(v);
+            i += 3;
+        } else {
+            out.push(b[i]);
+            i += 1;
+        }
+    }
+    String::from_utf8_lossy(&out).into_owned()
 }
 
 fn host_of(url: &str) -> &str {
@@ -709,7 +820,7 @@ fn write(path: &Path, contents: &str) -> Result<()> {
 }
 
 /// Copies an entry's assets (everything but index.md and `drafts/`), hard-linking where possible.
-fn copy_dir(src: &Path, dst: &Path) -> Result<()> {
+fn copy_dir(images: &Images, src: &Path, dst: &Path) -> Result<()> {
     fs::create_dir_all(dst).map_err(|e| Error::io(dst, e))?;
     for entry in fs::read_dir(src).map_err(|e| Error::io(src, e))? {
         let entry = entry.map_err(|e| Error::io(src, e))?;
@@ -720,9 +831,12 @@ fn copy_dir(src: &Path, dst: &Path) -> Result<()> {
         }
         let to = dst.join(&name);
         if from.is_dir() {
-            copy_dir(&from, &to)?;
-        } else if fs::hard_link(&from, &to).is_err() {
-            fs::copy(&from, &to).map_err(|e| Error::io(&from, e))?;
+            copy_dir(images, &from, &to)?;
+        } else {
+            if fs::hard_link(&from, &to).is_err() {
+                fs::copy(&from, &to).map_err(|e| Error::io(&from, e))?;
+            }
+            images.publish(&from, &to)?;
         }
     }
     Ok(())
@@ -756,7 +870,9 @@ mod tests {
             "curations/sounds/music/gogo/index.md",
             &entry("GoGo Penguin", "2021-11-20"),
         );
-        put(r, "curations/sounds/music/gogo/cover.jpg", "jpg");
+        image::RgbImage::from_pixel(900, 900, image::Rgb([20, 120, 60]))
+            .save(r.join("curations/sounds/music/gogo/cover.jpg"))
+            .unwrap();
         put(
             r,
             "curations/sounds/music/albums.toml",
@@ -780,7 +896,7 @@ mod tests {
     #[test]
     fn monolith_urls_are_paths() {
         let (_d, t, c) = fixture();
-        let site = Site::new(&t, &c, false).unwrap();
+        let site = Site::new(&t, &c, false, &_d.path().join(".cache")).unwrap();
         let u = Urls::new(&site, &Target::Monolith);
         assert_eq!(u.node(t.node("curations")), "/curations/");
         assert_eq!(u.node(t.node("music")), "/curations/sounds/music/");
@@ -789,7 +905,7 @@ mod tests {
     #[test]
     fn breakout_urls_reroot_and_leave_the_subtree_absolute() {
         let (_d, t, c) = fixture();
-        let site = Site::new(&t, &c, false).unwrap();
+        let site = Site::new(&t, &c, false, &_d.path().join(".cache")).unwrap();
         let target = Target::Breakout("tastes".into());
         let u = Urls::new(&site, &target);
         assert_eq!(u.node(t.node("tastes")), "/");
@@ -814,13 +930,13 @@ mod tests {
     #[test]
     fn links_to_drafts_do_not_resolve() {
         let (_d, t, c) = fixture();
-        let site = Site::new(&t, &c, false).unwrap();
+        let site = Site::new(&t, &c, false, &_d.path().join(".cache")).unwrap();
         let u = Urls::new(&site, &Target::Monolith);
         assert!(
             u.resolve(r#"<a href="@/curations/tastes/tea/oolong/">"#)
                 .is_err()
         );
-        let with_drafts = Site::new(&t, &c, true).unwrap();
+        let with_drafts = Site::new(&t, &c, true, &_d.path().join(".cache")).unwrap();
         let u = Urls::new(&with_drafts, &Target::Monolith);
         assert!(
             u.resolve(r#"<a href="@/curations/tastes/tea/oolong/">"#)
@@ -831,7 +947,7 @@ mod tests {
     #[test]
     fn breakout_crumbs_start_at_the_broken_out_node() {
         let (_d, t, c) = fixture();
-        let site = Site::new(&t, &c, false).unwrap();
+        let site = Site::new(&t, &c, false, &_d.path().join(".cache")).unwrap();
         let target = Target::Breakout("sounds".into());
         let u = Urls::new(&site, &target);
         let music = t.node("music");
@@ -855,7 +971,7 @@ mod tests {
     #[test]
     fn pills_hide_empty_nodes_and_count_subtrees() {
         let (_d, t, c) = fixture();
-        let site = Site::new(&t, &c, false).unwrap();
+        let site = Site::new(&t, &c, false, &_d.path().join(".cache")).unwrap();
         let u = Urls::new(&site, &Target::Monolith);
         let pills: Vec<_> = u
             .child_pills(t.node("curations"))
@@ -882,10 +998,20 @@ mod tests {
     #[test]
     fn builds_monolith_and_breakout_with_assets_and_passing_links() {
         let (_d, t, c) = fixture();
-        let site = Site::new(&t, &c, false).unwrap();
+        let site = Site::new(&t, &c, false, &_d.path().join(".cache")).unwrap();
         let out = tempfile::tempdir().unwrap();
         let mono = build(&site, &Target::Monolith, out.path()).unwrap();
         assert!(mono.join("curations/sounds/music/gogo/cover.jpg").is_file());
+        assert!(
+            mono.join("curations/sounds/music/gogo/cover.jpg.w480.jpg")
+                .is_file()
+        );
+        let music = fs::read_to_string(mono.join("curations/sounds/music/index.html")).unwrap();
+        assert!(
+            music.contains("cover.jpg.w480.jpg 480w"),
+            "album covers use scaled copies"
+        );
+        assert!(music.contains(r#"data-full="/curations/sounds/music/gogo/cover.jpg""#));
         assert!(
             !mono.join("curations/tastes/tea/oolong").exists(),
             "drafts are not built"
@@ -905,7 +1031,7 @@ mod tests {
     #[test]
     fn breakout_of_a_non_breakout_node_is_refused() {
         let (_d, t, c) = fixture();
-        let site = Site::new(&t, &c, false).unwrap();
+        let site = Site::new(&t, &c, false, &_d.path().join(".cache")).unwrap();
         let out = tempfile::tempdir().unwrap();
         let err = build(&site, &Target::Breakout("media".into()), out.path()).unwrap_err();
         assert!(matches!(err, Error::NotABreakout(_)));

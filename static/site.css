@@ -26,6 +26,7 @@
 
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
+img { max-width: 100%; height: auto; }
 body { margin: 0; background: var(--surface-100); color: var(--ink); font: 400 17px/28px var(--font-body); }
 a { color: var(--branch); text-decoration: none; }
 a:hover { text-decoration: underline; }

@@ -72,9 +72,7 @@ pub struct ArtItem {
     pub artist: String,
     pub title: String,
     pub source: Option<String>,
-    pub width: u32,
-    pub height: u32,
-    /// Path relative to the art node folder.
+    /// Path relative to the art node folder. Display size is read from the file.
     pub file: String,
 }
 
@@ -626,7 +624,7 @@ pub mod tests {
         write(
             r,
             "curations/sights/art/items.toml",
-            "[[item]]\nid = \"a\"\ngroup = \"G\"\nartist = \"A\"\ntitle = \"T\"\nwidth = 1\nheight = 1\nfile = \"images/missing.jpg\"\n",
+            "[[item]]\nid = \"a\"\ngroup = \"G\"\nartist = \"A\"\ntitle = \"T\"\nfile = \"images/missing.jpg\"\n",
         );
         let p = problems(r);
         assert!(p.iter().any(|m| m.contains("malformed URL")), "{p:?}");
