@@ -16,6 +16,15 @@ use crate::markdown::{self, Heading, Rendered};
 
 const STYLESHEET: &str = include_str!("../static/site.css");
 const SCRIPT: &str = include_str!("../static/site.js");
+/// Files served at the root of every target.
+const ROOT_FILES: [(&str, &[u8]); 3] = [
+    ("favicon.svg", include_bytes!("../static/favicon.svg")),
+    ("favicon-32.png", include_bytes!("../static/favicon-32.png")),
+    (
+        "apple-touch-icon.png",
+        include_bytes!("../static/apple-touch-icon.png"),
+    ),
+];
 
 static IMG_OR_DIV: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"<img\b[^>]*>|<div\b[^>]*>|</div>").unwrap());
@@ -376,6 +385,10 @@ pub fn build(site: &Site, target: &Target, out: &Path) -> Result<PathBuf> {
     write(&dir.join("404.html"), &not_found.render()?)?;
     write(&dir.join("site.css"), STYLESHEET)?;
     write(&dir.join("site.js"), SCRIPT)?;
+    for (name, bytes) in ROOT_FILES {
+        let path = dir.join(name);
+        fs::write(&path, bytes).map_err(|e| Error::io(&path, e))?;
+    }
     Ok(dir)
 }
 
